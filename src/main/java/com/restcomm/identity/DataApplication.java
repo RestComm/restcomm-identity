@@ -1,4 +1,4 @@
-package org.keycloak.example.oauth;
+package com.restcomm.identity;
 
 import javax.ws.rs.ApplicationPath;
 import javax.ws.rs.core.Application;
