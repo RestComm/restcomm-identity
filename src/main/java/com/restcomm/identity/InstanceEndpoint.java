@@ -4,6 +4,7 @@ import javax.ws.rs.FormParam;
 import javax.ws.rs.POST;
 import javax.ws.rs.Path;
 import javax.ws.rs.Produces;
+import javax.ws.rs.core.MediaType;
 import javax.ws.rs.core.Response;
 
 import org.apache.http.HttpEntity;
@@ -24,6 +25,7 @@ import org.keycloak.util.JsonSerialization;
 import org.keycloak.util.KeycloakUriBuilder;
 
 import com.google.gson.Gson;
+import com.restcomm.identity.model.CreateInstanceResponse;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -38,23 +40,31 @@ public class InstanceEndpoint {
 
     private static String authServerPrefix = "https://identity.restcomm.com"; // port 8443 should be used for accessing server from itself. From outside use 443 instead (or blank)
 
-    public AccessTokenResponse token;
+    private AccessTokenResponse token;
+    private Gson gson;
+
+    public InstanceEndpoint() {
+        gson = new Gson();
+    }
 
     public static String getAuthServerPrefix() {
         return authServerPrefix;
     }
-
-
 
     @POST
     @Produces("application/json")
     public Response createInstanceMethod(@FormParam(value = "name") String instanceName, @FormParam(value = "prefix") String prefix) throws Exception {
         AccessTokenResponse token = getToken();
         createInstance(instanceName, prefix, token);
-        return Response.ok().build();
+
+        CreateInstanceResponse responseModel = new CreateInstanceResponse();
+        // TODO - normally, we should generate a random value and return it
+        responseModel.setInstanceId(instanceName);
+
+        return Response.ok(gson.toJson(responseModel), MediaType.APPLICATION_JSON).build();
     }
 
-    public void createInstance(String instanceName, String prefix, AccessTokenResponse token ) throws Exception {
+    protected void createInstance(String instanceName, String prefix, AccessTokenResponse token ) throws Exception {
         logger.info("Creating instance '" + instanceName + "'");
 
         createRvdClient(instanceName + "-restcomm-rvd", prefix);
@@ -180,7 +190,7 @@ public class InstanceEndpoint {
             post.addHeader("Authorization", "Bearer " + token.getToken());
             post.addHeader("Content-Type","application/json");
 
-            Gson gson = new Gson();
+
             String json_user = gson.toJson(client_model);
             StringEntity stringBody = new StringEntity(json_user,"UTF-8");
             post.setEntity(stringBody);
@@ -203,7 +213,7 @@ public class InstanceEndpoint {
     }
 
     // Retrieves a token and stores it for future use (within this request).
-    AccessTokenResponse getToken() throws Exception {
+    protected AccessTokenResponse getToken() throws Exception {
         if (token != null)
             return token;
 
