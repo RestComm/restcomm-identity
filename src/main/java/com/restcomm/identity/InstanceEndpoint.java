@@ -1,7 +1,6 @@
 package com.restcomm.identity;
 
 import javax.ws.rs.FormParam;
-import javax.ws.rs.GET;
 import javax.ws.rs.POST;
 import javax.ws.rs.Path;
 import javax.ws.rs.Produces;
@@ -28,6 +27,7 @@ import com.google.gson.Gson;
 
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.UnsupportedEncodingException;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -36,27 +36,136 @@ public class InstanceEndpoint {
 
     static final Logger logger = Logger.getLogger(InstanceEndpoint.class.getName());
 
-    @GET
-    @Produces("application/json")
-    public List<String> getInstance() {
-        ArrayList<String> rtn = new ArrayList<String>();
-        rtn.add("iphone");
-        rtn.add("ipad");
-        rtn.add("ipod");
-        return rtn;
+    private static String authServerPrefix = "https://identity.restcomm.com"; // port 8443 should be used for accessing server from itself. From outside use 443 instead (or blank)
+
+    public AccessTokenResponse token;
+
+    public static String getAuthServerPrefix() {
+        return authServerPrefix;
     }
+
+
 
     @POST
     @Produces("application/json")
-    public Response createInstanceMethod(@FormParam(value = "name") String instanceName) throws Exception {
+    public Response createInstanceMethod(@FormParam(value = "name") String instanceName, @FormParam(value = "prefix") String prefix) throws Exception {
         AccessTokenResponse token = getToken();
-        createInstance(instanceName, token);
+        createInstance(instanceName, prefix, token);
         return Response.ok().build();
     }
 
-    public void createInstance(String instanceName, AccessTokenResponse token ) throws Exception {
+    public void createInstance(String instanceName, String prefix, AccessTokenResponse token ) throws Exception {
         logger.info("Creating instance '" + instanceName + "'");
 
+        createRvdClient(instanceName + "-restcomm-rvd", prefix);
+        createRvdUiClient(instanceName + "-restcomm-rvd-ui", prefix);
+        createRestcommClient(instanceName + "-restcomm-rest", prefix);
+        createRestcommUiClient(instanceName + "-restcomm-ui", prefix);
+    }
+
+    protected ClientRepresentation createRvdClient(String name, String prefix) throws UnsupportedEncodingException, InstanceManagerException {
+        ClientRepresentation client_model = new ClientRepresentation();
+        client_model.setAdminUrl(prefix + "/restcomm-rvd/services");
+        client_model.setBaseUrl(prefix + "/restcomm-rvd/services");
+        client_model.setSurrogateAuthRequired(false);
+        client_model.setEnabled(true);
+        client_model.setNotBefore(0);
+        client_model.setBearerOnly(true);
+        client_model.setConsentRequired(false);
+        client_model.setDirectGrantsOnly(false);
+        client_model.setPublicClient(false);
+        client_model.setFrontchannelLogout(false);
+        client_model.setFullScopeAllowed(true);
+        client_model.setNodeReRegistrationTimeout(-1);
+        client_model.setClientId(name);
+
+        makeRequest(client_model);
+        return client_model;
+    }
+
+    protected ClientRepresentation createRvdUiClient(String name, String prefix) throws UnsupportedEncodingException, InstanceManagerException {
+        ClientRepresentation client_model = new ClientRepresentation();
+        client_model.setBaseUrl(prefix + "/restcomm-rvd/index.html");
+        client_model.setSurrogateAuthRequired(false);
+        client_model.setEnabled(true);
+        client_model.setNotBefore(0);
+        client_model.setBearerOnly(false);
+        client_model.setConsentRequired(false);
+        client_model.setDirectGrantsOnly(false);
+        client_model.setPublicClient(true);
+        client_model.setFrontchannelLogout(false);
+        client_model.setFullScopeAllowed(true);
+        client_model.setNodeReRegistrationTimeout(-1);
+        client_model.setClientId(name);
+
+        List<String> redirectUris = new ArrayList<String>();
+        redirectUris.add(prefix + "/restcomm-rvd/*");
+        client_model.setRedirectUris(redirectUris);
+
+        List<String> webOrigins = new ArrayList<String>();
+        webOrigins.add(prefix);
+        client_model.setWebOrigins(webOrigins);
+
+        makeRequest(client_model);
+        return client_model;
+    }
+
+    protected ClientRepresentation createRestcommClient(String name, String prefix) throws UnsupportedEncodingException, InstanceManagerException {
+        ClientRepresentation client_model = new ClientRepresentation();
+        client_model.setAdminUrl(prefix + "/restcomm/keycloak");
+        client_model.setBaseUrl(prefix + "/restcomm/keycloak");
+        client_model.setSurrogateAuthRequired(false);
+        client_model.setEnabled(true);
+        client_model.setNotBefore(0);
+        client_model.setBearerOnly(false);
+        client_model.setConsentRequired(false);
+        client_model.setDirectGrantsOnly(false);
+        client_model.setPublicClient(false);
+        client_model.setFrontchannelLogout(false);
+        client_model.setFullScopeAllowed(true);
+        client_model.setNodeReRegistrationTimeout(-1);
+        client_model.setClientId(name);
+
+        List<String> redirectUris = new ArrayList<String>();
+        redirectUris.add(prefix + "/*");
+        client_model.setRedirectUris(redirectUris);
+
+        List<String> webOrigins = new ArrayList<String>();
+        webOrigins.add(prefix);
+        client_model.setWebOrigins(webOrigins);
+
+        makeRequest(client_model);
+        return client_model;
+    }
+
+    protected ClientRepresentation createRestcommUiClient(String name, String prefix) throws UnsupportedEncodingException, InstanceManagerException {
+        ClientRepresentation client_model = new ClientRepresentation();
+        client_model.setBaseUrl(prefix + "/index.html");
+        client_model.setSurrogateAuthRequired(false);
+        client_model.setEnabled(true);
+        client_model.setNotBefore(0);
+        client_model.setBearerOnly(false);
+        client_model.setConsentRequired(false);
+        client_model.setDirectGrantsOnly(false);
+        client_model.setPublicClient(true);
+        client_model.setFrontchannelLogout(false);
+        client_model.setFullScopeAllowed(true);
+        client_model.setNodeReRegistrationTimeout(-1);
+        client_model.setClientId(name);
+
+        List<String> redirectUris = new ArrayList<String>();
+        redirectUris.add(prefix + "/*");
+        client_model.setRedirectUris(redirectUris);
+
+        List<String> webOrigins = new ArrayList<String>();
+        webOrigins.add(prefix);
+        client_model.setWebOrigins(webOrigins);
+
+        makeRequest(client_model);
+        return client_model;
+    }
+
+    protected HttpResponse makeRequest(ClientRepresentation client_model) throws UnsupportedEncodingException, InstanceManagerException {
         /*SSLContextBuilder builder = new SSLContextBuilder();
         builder.loadTrustMaterial(null, new TrustSelfSignedStrategy());
         SSLConnectionSocketFactory sslsf = new SSLConnectionSocketFactory(builder.build());
@@ -64,28 +173,12 @@ public class InstanceEndpoint {
         */
         //CloseableHttpClient client = HttpClients.custom().createDefault();
 
-        String name = instanceName;
         HttpClient client = new HttpClientBuilder().disableTrustManager().build();
         try {
             //
-            HttpPost post = new HttpPost("https://identity.restcomm.com/auth/admin/realms/restcomm/clients");
+            HttpPost post = new HttpPost(getAuthServerPrefix() + "/auth/admin/realms/restcomm/clients");
             post.addHeader("Authorization", "Bearer " + token.getToken());
             post.addHeader("Content-Type","application/json");
-
-            ClientRepresentation client_model = new ClientRepresentation();
-            client_model.setAdminUrl("https://192.168.1.39:8443/restcomm-rvd/services");
-            client_model.setBaseUrl("https://192.168.1.39:8443/restcomm-rvd/services");
-            client_model.setSurrogateAuthRequired(false);
-            client_model.setEnabled(true);
-            client_model.setNotBefore(0);
-            client_model.setBearerOnly(true);
-            client_model.setConsentRequired(false);
-            client_model.setDirectGrantsOnly(false);
-            client_model.setPublicClient(false);
-            client_model.setFrontchannelLogout(false);
-            client_model.setFullScopeAllowed(true);
-            client_model.setNodeReRegistrationTimeout(-1);
-            client_model.setClientId(name);
 
             Gson gson = new Gson();
             String json_user = gson.toJson(client_model);
@@ -96,6 +189,7 @@ public class InstanceEndpoint {
                 if (response.getStatusLine().getStatusCode() >= 300) {
                     throw new InstanceManagerException();
                 }
+                return response;
 
             } catch (IOException e) {
                 throw new RuntimeException(e);
@@ -108,11 +202,15 @@ public class InstanceEndpoint {
 
     }
 
+    // Retrieves a token and stores it for future use (within this request).
     AccessTokenResponse getToken() throws Exception {
+        if (token != null)
+            return token;
+
         HttpClient client = new HttpClientBuilder().disableTrustManager().build();
 
         try {
-            HttpPost post = new HttpPost(KeycloakUriBuilder.fromUri("https://identity.restcomm.com/auth")
+            HttpPost post = new HttpPost(KeycloakUriBuilder.fromUri(getAuthServerPrefix() + "/auth")
                     .path(ServiceUrlConstants.TOKEN_PATH).build("restcomm"));
             List<NameValuePair> formparams = new ArrayList<NameValuePair>();
             formparams.add(new BasicNameValuePair(OAuth2Constants.GRANT_TYPE, "password"));
@@ -140,8 +238,8 @@ public class InstanceEndpoint {
             }
             InputStream is = entity.getContent();
             try {
-                AccessTokenResponse tokenResponse = JsonSerialization.readValue(is, AccessTokenResponse.class);
-                return tokenResponse;
+                token = JsonSerialization.readValue(is, AccessTokenResponse.class);
+                return token;
             } finally {
                 try {
                     is.close();
@@ -154,10 +252,10 @@ public class InstanceEndpoint {
         }
     }
 
-    public static String convertStreamToString(java.io.InputStream is) {
+    /*public static String convertStreamToString(java.io.InputStream is) {
         java.util.Scanner s = new java.util.Scanner(is).useDelimiter("\\A");
         return s.hasNext() ? s.next() : "";
-    }
+    }*/
 
     protected boolean isPublic() {
         return true;
