@@ -38,7 +38,7 @@ public class InstanceEndpoint {
 
     static final Logger logger = Logger.getLogger(InstanceEndpoint.class.getName());
 
-    private static String authServerPrefix = "https://identity.restcomm.com"; // port 8443 should be used for accessing server from itself. From outside use 443 instead (or blank)
+    private static String authServerPrefix = "https://identity.restcomm.com:8443"; // port 8443 should be used for accessing server from itself. From outside use 443 instead (or blank)
 
     private AccessTokenResponse token;
     private Gson gson;
@@ -53,9 +53,9 @@ public class InstanceEndpoint {
 
     @POST
     @Produces("application/json")
-    public Response createInstanceMethod(@FormParam(value = "name") String instanceName, @FormParam(value = "prefix") String prefix) throws Exception {
+    public Response createInstanceMethod(@FormParam(value = "name") String instanceName, @FormParam(value = "prefix") String prefix, @FormParam(value = "secret") String clientSecret) throws Exception {
         AccessTokenResponse token = getToken();
-        createInstance(instanceName, prefix, token);
+        createInstance(instanceName, prefix, token, clientSecret);
 
         CreateInstanceResponse responseModel = new CreateInstanceResponse();
         // TODO - normally, we should generate a random value and return it
@@ -64,16 +64,16 @@ public class InstanceEndpoint {
         return Response.ok(gson.toJson(responseModel), MediaType.APPLICATION_JSON).build();
     }
 
-    protected void createInstance(String instanceName, String prefix, AccessTokenResponse token ) throws Exception {
+    protected void createInstance(String instanceName, String prefix, AccessTokenResponse token, String clientSecret ) throws Exception {
         logger.info("Creating instance '" + instanceName + "'");
 
-        createRvdClient(instanceName + "-restcomm-rvd", prefix);
-        createRvdUiClient(instanceName + "-restcomm-rvd-ui", prefix);
-        createRestcommClient(instanceName + "-restcomm-rest", prefix);
-        createRestcommUiClient(instanceName + "-restcomm-ui", prefix);
+        createRvdClient(instanceName + "-restcomm-rvd", prefix, null);
+        createRvdUiClient(instanceName + "-restcomm-rvd-ui", prefix, null);
+        createRestcommClient(instanceName + "-restcomm-rest", prefix, clientSecret);
+        createRestcommUiClient(instanceName + "-restcomm-ui", prefix, null);
     }
 
-    protected ClientRepresentation createRvdClient(String name, String prefix) throws UnsupportedEncodingException, InstanceManagerException {
+    protected ClientRepresentation createRvdClient(String name, String prefix, String clientSecret) throws UnsupportedEncodingException, InstanceManagerException {
         ClientRepresentation client_model = new ClientRepresentation();
         client_model.setAdminUrl(prefix + "/restcomm-rvd/services");
         client_model.setBaseUrl(prefix + "/restcomm-rvd/services");
@@ -88,12 +88,14 @@ public class InstanceEndpoint {
         client_model.setFullScopeAllowed(true);
         client_model.setNodeReRegistrationTimeout(-1);
         client_model.setClientId(name);
+        client_model.setSecret(clientSecret);
+
 
         makeRequest(client_model);
         return client_model;
     }
 
-    protected ClientRepresentation createRvdUiClient(String name, String prefix) throws UnsupportedEncodingException, InstanceManagerException {
+    protected ClientRepresentation createRvdUiClient(String name, String prefix, String clientSecret) throws UnsupportedEncodingException, InstanceManagerException {
         ClientRepresentation client_model = new ClientRepresentation();
         client_model.setBaseUrl(prefix + "/restcomm-rvd/index.html");
         client_model.setSurrogateAuthRequired(false);
@@ -107,6 +109,8 @@ public class InstanceEndpoint {
         client_model.setFullScopeAllowed(true);
         client_model.setNodeReRegistrationTimeout(-1);
         client_model.setClientId(name);
+        client_model.setSecret(clientSecret);
+
 
         List<String> redirectUris = new ArrayList<String>();
         redirectUris.add(prefix + "/restcomm-rvd/*");
@@ -120,7 +124,7 @@ public class InstanceEndpoint {
         return client_model;
     }
 
-    protected ClientRepresentation createRestcommClient(String name, String prefix) throws UnsupportedEncodingException, InstanceManagerException {
+    protected ClientRepresentation createRestcommClient(String name, String prefix, String clientSecret) throws UnsupportedEncodingException, InstanceManagerException {
         ClientRepresentation client_model = new ClientRepresentation();
         client_model.setAdminUrl(prefix + "/restcomm/keycloak");
         client_model.setBaseUrl(prefix + "/restcomm/keycloak");
@@ -135,6 +139,7 @@ public class InstanceEndpoint {
         client_model.setFullScopeAllowed(true);
         client_model.setNodeReRegistrationTimeout(-1);
         client_model.setClientId(name);
+        client_model.setSecret(clientSecret);
 
         List<String> redirectUris = new ArrayList<String>();
         redirectUris.add(prefix + "/*");
@@ -148,7 +153,7 @@ public class InstanceEndpoint {
         return client_model;
     }
 
-    protected ClientRepresentation createRestcommUiClient(String name, String prefix) throws UnsupportedEncodingException, InstanceManagerException {
+    protected ClientRepresentation createRestcommUiClient(String name, String prefix, String clientSecret) throws UnsupportedEncodingException, InstanceManagerException {
         ClientRepresentation client_model = new ClientRepresentation();
         client_model.setBaseUrl(prefix + "/index.html");
         client_model.setSurrogateAuthRequired(false);
@@ -162,6 +167,7 @@ public class InstanceEndpoint {
         client_model.setFullScopeAllowed(true);
         client_model.setNodeReRegistrationTimeout(-1);
         client_model.setClientId(name);
+        client_model.setSecret(clientSecret);
 
         List<String> redirectUris = new ArrayList<String>();
         redirectUris.add(prefix + "/*");
