@@ -38,7 +38,7 @@ public class InstanceEndpoint {
 
     static final Logger logger = Logger.getLogger(InstanceEndpoint.class.getName());
 
-    private static String authServerPrefix = "https://identity.restcomm.com:8443"; // port 8443 should be used for accessing server from itself. From outside use 443 instead (or blank)
+    private static String authServerPrefix = "https://identity.restcomm.com"; // port 8443 should be used for accessing server from inside. From outside use 443 instead (or blank)
 
     private AccessTokenResponse token;
     private Gson gson;

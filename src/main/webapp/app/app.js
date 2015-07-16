@@ -1,9 +1,9 @@
-angular.module('im', [
+angular.module('rid', [
 'ui.bootstrap',
 'ngRoute'
 ]);
 
-angular.module('im').config([ '$routeProvider', function($routeProvider) {
+angular.module('rid').config([ '$routeProvider', function($routeProvider) {
 	
 	$routeProvider.when('/register', {
 		templateUrl : 'templates/registerInstance.html',

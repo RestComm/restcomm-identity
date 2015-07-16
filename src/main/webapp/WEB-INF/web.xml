@@ -4,8 +4,8 @@
       xsi:schemaLocation="http://java.sun.com/xml/ns/javaee http://java.sun.com/xml/ns/javaee/web-app_3_0.xsd"
       version="3.0">
       
-    <module-name>instance-manager</module-name>
-	<display-name>Instance Manager</display-name>
+    <module-name>restcomm-identity</module-name>
+	<display-name>Restcomm Identity</display-name>
 
 	<!-- Disable JBoss RESTeasy JAX-RS implementation as it conflicts with Jersey -->
 	<!--
@@ -23,23 +23,19 @@
 	</context-param>
 	-->
 	
-	<!--
     <security-constraint>
         <web-resource-collection>
-            <url-pattern>/*</url-pattern>
+            <url-pattern>/api/*</url-pattern>
         </web-resource-collection>
         <auth-constraint>
             <role-name>user</role-name>
         </auth-constraint>
     </security-constraint>
--->
 
-<!--
     <login-config>
         <auth-method>KEYCLOAK</auth-method>
-        <realm-name>demo</realm-name>
+        <realm-name>restcomm</realm-name>
     </login-config>
--->
 
     <security-role>
         <role-name>user</role-name>
