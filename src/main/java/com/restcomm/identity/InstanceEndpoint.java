@@ -1,17 +1,21 @@
 package com.restcomm.identity;
 
+import javax.ws.rs.DELETE;
 import javax.ws.rs.FormParam;
+import javax.ws.rs.PathParam;
 import javax.ws.rs.POST;
 import javax.ws.rs.Path;
 import javax.ws.rs.Produces;
 import javax.ws.rs.core.MediaType;
 import javax.ws.rs.core.Response;
+import javax.ws.rs.core.Response.Status;
 
 import org.apache.http.HttpEntity;
 import org.apache.http.HttpResponse;
 import org.apache.http.NameValuePair;
 import org.apache.http.client.HttpClient;
 import org.apache.http.client.entity.UrlEncodedFormEntity;
+import org.apache.http.client.methods.HttpDelete;
 import org.apache.http.client.methods.HttpPost;
 import org.apache.http.entity.StringEntity;
 import org.apache.http.message.BasicNameValuePair;
@@ -38,7 +42,7 @@ public class InstanceEndpoint {
 
     static final Logger logger = Logger.getLogger(InstanceEndpoint.class.getName());
 
-    private static String authServerPrefix = "https://identity.restcomm.com"; // port 8443 should be used for accessing server from inside. From outside use 443 instead (or blank)
+    private static String authServerPrefix = "https://identity.restcomm.com:8443"; // port 8443 should be used for accessing server from inside. From outside use 443 instead (or blank)
 
     private AccessTokenResponse token;
     private Gson gson;
@@ -64,6 +68,13 @@ public class InstanceEndpoint {
         return Response.ok(gson.toJson(responseModel), MediaType.APPLICATION_JSON).build();
     }
 
+    @DELETE
+    @Path("/{instanceName}")
+    public Response dropInstanceMethod(@PathParam("instanceName") String instanceName) throws Exception {
+        logger.info("Dropping instance '" + instanceName + "'");
+        return dropInstance(instanceName);
+    }
+
     protected void createInstance(String instanceName, String prefix, AccessTokenResponse token, String clientSecret ) throws Exception {
         logger.info("Creating instance '" + instanceName + "'");
 
@@ -71,6 +82,46 @@ public class InstanceEndpoint {
         createRvdUiClient(instanceName + "-restcomm-rvd-ui", prefix, null);
         createRestcommClient(instanceName + "-restcomm-rest", prefix, clientSecret);
         createRestcommUiClient(instanceName + "-restcomm-ui", prefix, null);
+    }
+
+    protected Response dropInstance(String instanceName) throws Exception {
+        if ( !validateInstanceName(instanceName) )
+            return Response.status(Status.BAD_REQUEST).build();
+
+        String[] clientNames = {
+                instanceName + "-restcomm-rvd",
+                instanceName + "-restcomm-rvd-ui",
+                instanceName + "-restcomm-rest",
+                instanceName + "-restcomm-ui"
+        };
+
+        int returnStatus = 200;
+        for ( String clientName: clientNames) {
+            try {
+                logger.info("Dropping client application '" + clientName +"'" );
+                makeDropClientRequest(clientName);
+            } catch (InstanceManagerException e ) {
+                logger.warn("Could not drop client application '" + clientName + "'" + ((e.getStatusCode() != null) ? (" .HTTP error: " + e.getStatusCode()) : ""));
+                if (e.getStatusCode() == null)
+                    returnStatus = 500; // looks like a serious error
+                else
+                if (returnStatus == 200)
+                    returnStatus = e.getStatusCode();
+                else
+                if ( !e.getStatusCode().equals(returnStatus) )
+                    returnStatus = 500; //  if various different http errors are returned, make it a 500
+            }
+        }
+        return Response.status(returnStatus).build();
+    }
+
+    // make sure the name abides by the general instance naming convention. For now it acceptschecks all names
+    // TODO add proper limitations
+    protected boolean validateInstanceName(String instanceName) {
+        if ( instanceName == null || instanceName.isEmpty() ) {
+            return false;
+        }
+        return true;
     }
 
     protected ClientRepresentation createRvdClient(String name, String prefix, String clientSecret) throws UnsupportedEncodingException, InstanceManagerException {
@@ -181,14 +232,30 @@ public class InstanceEndpoint {
         return client_model;
     }
 
-    protected HttpResponse makeRequest(ClientRepresentation client_model) throws UnsupportedEncodingException, InstanceManagerException {
-        /*SSLContextBuilder builder = new SSLContextBuilder();
-        builder.loadTrustMaterial(null, new TrustSelfSignedStrategy());
-        SSLConnectionSocketFactory sslsf = new SSLConnectionSocketFactory(builder.build());
-        CloseableHttpClient client = HttpClients.custom().setSSLSocketFactory(sslsf).build();
-        */
-        //CloseableHttpClient client = HttpClients.custom().createDefault();
+    protected HttpResponse makeDropClientRequest(String clientName) throws Exception {
+        HttpClient client = new HttpClientBuilder().disableTrustManager().build();
+        try {
+            //
+            HttpDelete request = new HttpDelete(getAuthServerPrefix() + "/auth/admin/realms/restcomm/clients/" + clientName);
+            request.addHeader("Authorization", "Bearer " + getToken().getToken());
+            try {
+                HttpResponse response = client.execute(request);
+                if (response.getStatusLine().getStatusCode() >= 300) {
+                    throw new InstanceManagerException(response.getStatusLine().getStatusCode());
+                }
+                return response;
+            } catch (IOException e) {
+                throw new RuntimeException(e);
+            }
 
+        } finally {
+            //client.close();
+            client.getConnectionManager().shutdown();
+        }
+    }
+
+
+    protected HttpResponse makeRequest(ClientRepresentation client_model) throws UnsupportedEncodingException, InstanceManagerException {
         HttpClient client = new HttpClientBuilder().disableTrustManager().build();
         try {
             //
@@ -230,8 +297,8 @@ public class InstanceEndpoint {
                     .path(ServiceUrlConstants.TOKEN_PATH).build("restcomm"));
             List<NameValuePair> formparams = new ArrayList<NameValuePair>();
             formparams.add(new BasicNameValuePair(OAuth2Constants.GRANT_TYPE, "password"));
-            formparams.add(new BasicNameValuePair("username", "otsakir"));
-            formparams.add(new BasicNameValuePair("password", "password"));
+            formparams.add(new BasicNameValuePair("username", "otsakir")); // TODO use a dedicated administrator user here
+            formparams.add(new BasicNameValuePair("password", "password")); // TODO and his password
 
             if (isPublic()) { // if client is public access type
                 formparams.add(new BasicNameValuePair(OAuth2Constants.CLIENT_ID, "realm-management"));
