@@ -2,6 +2,7 @@ package com.restcomm.identity;
 
 import javax.ws.rs.DELETE;
 import javax.ws.rs.FormParam;
+import javax.ws.rs.GET;
 import javax.ws.rs.PathParam;
 import javax.ws.rs.POST;
 import javax.ws.rs.Path;
@@ -10,29 +11,16 @@ import javax.ws.rs.core.MediaType;
 import javax.ws.rs.core.Response;
 import javax.ws.rs.core.Response.Status;
 
-import org.apache.http.HttpEntity;
-import org.apache.http.HttpResponse;
-import org.apache.http.NameValuePair;
-import org.apache.http.client.HttpClient;
-import org.apache.http.client.entity.UrlEncodedFormEntity;
-import org.apache.http.client.methods.HttpDelete;
-import org.apache.http.client.methods.HttpPost;
-import org.apache.http.entity.StringEntity;
-import org.apache.http.message.BasicNameValuePair;
 import org.apache.log4j.Logger;
-import org.keycloak.OAuth2Constants;
-import org.keycloak.adapters.HttpClientBuilder;
-import org.keycloak.constants.ServiceUrlConstants;
+import org.keycloak.admin.client.Keycloak;
+import org.keycloak.admin.client.resource.ClientResource;
+import org.keycloak.admin.client.resource.ClientsResource;
 import org.keycloak.representations.AccessTokenResponse;
 import org.keycloak.representations.idm.ClientRepresentation;
-import org.keycloak.util.JsonSerialization;
-import org.keycloak.util.KeycloakUriBuilder;
-
+import org.keycloak.representations.idm.RoleRepresentation;
 import com.google.gson.Gson;
 import com.restcomm.identity.model.CreateInstanceResponse;
 
-import java.io.IOException;
-import java.io.InputStream;
 import java.io.UnsupportedEncodingException;
 import java.util.ArrayList;
 import java.util.List;
@@ -43,7 +31,13 @@ public class InstanceEndpoint {
     static final Logger logger = Logger.getLogger(InstanceEndpoint.class.getName());
 
     private static String authServerPrefix = "https://identity.restcomm.com:8443"; // port 8443 should be used for accessing server from inside. From outside use 443 instead (or blank)
+    private static String ADMIN_USERNAME = "otsakir";
+    private static String ADMIN_PASSWORD = "password";
+    private static String ADMIN_CLIENT_ID = "restcomm-identity-rest";
+    //private static String ADMIN_CLIENT_SECRET = "a735a223-2760-4248-bb34-744176b8b931"; // open the realm-management client and go to 'Credentials' to find it
+    private static String RESTCOMM_REALM = "restcomm";
 
+    private Keycloak keycloak;
     private AccessTokenResponse token;
     private Gson gson;
 
@@ -55,11 +49,80 @@ public class InstanceEndpoint {
         return authServerPrefix;
     }
 
+    public static String getAdminUsername() {
+        return ADMIN_USERNAME;
+    }
+
+    public static String getAdminPassword() {
+        return ADMIN_PASSWORD;
+    }
+
+    public static String getAdminClientId() {
+        return ADMIN_CLIENT_ID;
+    }
+
+    //public static String getAdminClientSecret() {
+    //    return ADMIN_CLIENT_SECRET;
+    //}
+
+    public static String getRestcommRealm() {
+        return RESTCOMM_REALM;
+    }
+/*
+    @GET
+    @Path("/test")
+    public Response test() {
+        String authServer = getAuthServerPrefix() + "/auth";
+        Keycloak keycloak = Keycloak.getInstance(authServer, "restcomm", getAdminUsername(), getAdminPassword(), "restcomm-identity-rest" );
+
+        AccessTokenResponse tokenResponse = keycloak.tokenManager().getAccessToken();
+        ClientsResource clients = keycloak.realm("restcomm").clients();
+        ClientResource client = clients.get("otsakir-39cd4940-restcomm-rvd");
+        ClientRepresentation representation = client.toRepresentation();
+
+        return Response.ok().build();
+    }
+*/
+    private void initKeycloakClient() {
+        String authServer = getAuthServerPrefix() + "/auth";
+        this.keycloak = Keycloak.getInstance(authServer, "restcomm", getAdminUsername(), getAdminPassword(), getAdminClientId());
+        // Retrieve a token
+        AccessTokenResponse tokenResponse = keycloak.tokenManager().getAccessToken();
+    }
+
     @POST
     @Produces("application/json")
     public Response createInstanceMethod(@FormParam(value = "name") String instanceName, @FormParam(value = "prefix") String prefix, @FormParam(value = "secret") String clientSecret) throws Exception {
-        AccessTokenResponse token = getToken();
-        createInstance(instanceName, prefix, token, clientSecret);
+        logger.info("Creating instance '" + instanceName + "'");
+        initKeycloakClient();
+
+        // Create Restcomm application
+        String clientName = instanceName + "-restcomm-rest";
+        ClientRepresentation clientRepr = createRestcommClient(clientName, prefix, clientSecret);
+        keycloak.realm(getRestcommRealm()).clients().create(clientRepr);
+        RoleRepresentation role = new RoleRepresentation("Developer", "Instance Developer");
+        keycloak.realm(getRestcommRealm()).clients().get(clientName).roles().create(role);
+
+        // Create Restcomm UI application
+        clientName = instanceName + "-restcomm-ui";
+        clientRepr = createRestcommUiClient(clientName, prefix, clientSecret);
+        keycloak.realm(getRestcommRealm()).clients().create(clientRepr);
+        role = new RoleRepresentation("Developer", "Instance Developer");
+        keycloak.realm(getRestcommRealm()).clients().get(clientName).roles().create(role);
+
+        // Create RVD application
+        clientName = instanceName + "-restcomm-rvd";
+        clientRepr = createRvdClient(clientName, prefix, clientSecret);
+        keycloak.realm(getRestcommRealm()).clients().create(clientRepr);
+        role = new RoleRepresentation("Developer", "Instance Developer");
+        keycloak.realm(getRestcommRealm()).clients().get(clientName).roles().create(role);
+
+        // Create RVD-UI application
+        clientName = instanceName + "-restcomm-rvd-ui";
+        clientRepr = createRvdUiClient(clientName, prefix, clientSecret);
+        keycloak.realm(getRestcommRealm()).clients().create(clientRepr);
+        role = new RoleRepresentation("Developer", "Instance Developer");
+        keycloak.realm(getRestcommRealm()).clients().get(clientName).roles().create(role);
 
         CreateInstanceResponse responseModel = new CreateInstanceResponse();
         // TODO - normally, we should generate a random value and return it
@@ -70,21 +133,10 @@ public class InstanceEndpoint {
 
     @DELETE
     @Path("/{instanceName}")
-    public Response dropInstanceMethod(@PathParam("instanceName") String instanceName) throws Exception {
+    public Response dropInstanceMethod(@PathParam("instanceName") String instanceName) {
+        initKeycloakClient();
         logger.info("Dropping instance '" + instanceName + "'");
-        return dropInstance(instanceName);
-    }
 
-    protected void createInstance(String instanceName, String prefix, AccessTokenResponse token, String clientSecret ) throws Exception {
-        logger.info("Creating instance '" + instanceName + "'");
-
-        createRvdClient(instanceName + "-restcomm-rvd", prefix, null);
-        createRvdUiClient(instanceName + "-restcomm-rvd-ui", prefix, null);
-        createRestcommClient(instanceName + "-restcomm-rest", prefix, clientSecret);
-        createRestcommUiClient(instanceName + "-restcomm-ui", prefix, null);
-    }
-
-    protected Response dropInstance(String instanceName) throws Exception {
         if ( !validateInstanceName(instanceName) )
             return Response.status(Status.BAD_REQUEST).build();
 
@@ -94,25 +146,12 @@ public class InstanceEndpoint {
                 instanceName + "-restcomm-rest",
                 instanceName + "-restcomm-ui"
         };
-
-        int returnStatus = 200;
         for ( String clientName: clientNames) {
-            try {
-                logger.info("Dropping client application '" + clientName +"'" );
-                makeDropClientRequest(clientName);
-            } catch (InstanceManagerException e ) {
-                logger.warn("Could not drop client application '" + clientName + "'" + ((e.getStatusCode() != null) ? (" .HTTP error: " + e.getStatusCode()) : ""));
-                if (e.getStatusCode() == null)
-                    returnStatus = 500; // looks like a serious error
-                else
-                if (returnStatus == 200)
-                    returnStatus = e.getStatusCode();
-                else
-                if ( !e.getStatusCode().equals(returnStatus) )
-                    returnStatus = 500; //  if various different http errors are returned, make it a 500
-            }
+            keycloak.realm(getRestcommRealm()).clients().get(clientName).remove();
         }
-        return Response.status(returnStatus).build();
+
+        return Response.status(Status.OK).build();
+        //return dropInstance(instanceName);
     }
 
     // make sure the name abides by the general instance naming convention. For now it acceptschecks all names
@@ -141,8 +180,7 @@ public class InstanceEndpoint {
         client_model.setClientId(name);
         client_model.setSecret(clientSecret);
 
-
-        makeRequest(client_model);
+        //makeRequest(client_model);
         return client_model;
     }
 
@@ -171,7 +209,7 @@ public class InstanceEndpoint {
         webOrigins.add(prefix);
         client_model.setWebOrigins(webOrigins);
 
-        makeRequest(client_model);
+        //makeRequest(client_model);
         return client_model;
     }
 
@@ -200,7 +238,7 @@ public class InstanceEndpoint {
         webOrigins.add(prefix);
         client_model.setWebOrigins(webOrigins);
 
-        makeRequest(client_model);
+        //makeRequest(client_model);
         return client_model;
     }
 
@@ -228,119 +266,8 @@ public class InstanceEndpoint {
         webOrigins.add(prefix);
         client_model.setWebOrigins(webOrigins);
 
-        makeRequest(client_model);
+        //makeRequest(client_model);
         return client_model;
     }
 
-    protected HttpResponse makeDropClientRequest(String clientName) throws Exception {
-        HttpClient client = new HttpClientBuilder().disableTrustManager().build();
-        try {
-            //
-            HttpDelete request = new HttpDelete(getAuthServerPrefix() + "/auth/admin/realms/restcomm/clients/" + clientName);
-            request.addHeader("Authorization", "Bearer " + getToken().getToken());
-            try {
-                HttpResponse response = client.execute(request);
-                if (response.getStatusLine().getStatusCode() >= 300) {
-                    throw new InstanceManagerException(response.getStatusLine().getStatusCode());
-                }
-                return response;
-            } catch (IOException e) {
-                throw new RuntimeException(e);
-            }
-
-        } finally {
-            //client.close();
-            client.getConnectionManager().shutdown();
-        }
-    }
-
-
-    protected HttpResponse makeRequest(ClientRepresentation client_model) throws UnsupportedEncodingException, InstanceManagerException {
-        HttpClient client = new HttpClientBuilder().disableTrustManager().build();
-        try {
-            //
-            HttpPost post = new HttpPost(getAuthServerPrefix() + "/auth/admin/realms/restcomm/clients");
-            post.addHeader("Authorization", "Bearer " + token.getToken());
-            post.addHeader("Content-Type","application/json");
-
-
-            String json_user = gson.toJson(client_model);
-            StringEntity stringBody = new StringEntity(json_user,"UTF-8");
-            post.setEntity(stringBody);
-            try {
-                HttpResponse response = client.execute(post);
-                if (response.getStatusLine().getStatusCode() >= 300) {
-                    throw new InstanceManagerException();
-                }
-                return response;
-
-            } catch (IOException e) {
-                throw new RuntimeException(e);
-            }
-
-        } finally {
-            //client.close();
-            client.getConnectionManager().shutdown();
-        }
-
-    }
-
-    // Retrieves a token and stores it for future use (within this request).
-    protected AccessTokenResponse getToken() throws Exception {
-        if (token != null)
-            return token;
-
-        HttpClient client = new HttpClientBuilder().disableTrustManager().build();
-
-        try {
-            HttpPost post = new HttpPost(KeycloakUriBuilder.fromUri(getAuthServerPrefix() + "/auth")
-                    .path(ServiceUrlConstants.TOKEN_PATH).build("restcomm"));
-            List<NameValuePair> formparams = new ArrayList<NameValuePair>();
-            formparams.add(new BasicNameValuePair(OAuth2Constants.GRANT_TYPE, "password"));
-            formparams.add(new BasicNameValuePair("username", "otsakir")); // TODO use a dedicated administrator user here
-            formparams.add(new BasicNameValuePair("password", "password")); // TODO and his password
-
-            if (isPublic()) { // if client is public access type
-                formparams.add(new BasicNameValuePair(OAuth2Constants.CLIENT_ID, "realm-management"));
-            } else {
-                throw new UnsupportedOperationException();
-                //String authorization = BasicAuthHelper.createHeader("customer-portal", "secret-secret-secret");
-                //post.setHeader("Authorization", authorization);
-            }
-            UrlEncodedFormEntity form = new UrlEncodedFormEntity(formparams, "UTF-8");
-            post.setEntity(form);
-
-            HttpResponse response = client.execute(post);
-            int status = response.getStatusLine().getStatusCode();
-            HttpEntity entity = response.getEntity();
-            if (status != 200) {
-                throw new IOException("Bad status: " + status);
-            }
-            if (entity == null) {
-                throw new IOException("No Entity");
-            }
-            InputStream is = entity.getContent();
-            try {
-                token = JsonSerialization.readValue(is, AccessTokenResponse.class);
-                return token;
-            } finally {
-                try {
-                    is.close();
-                } catch (IOException ignored) {
-                }
-            }
-        } finally {
-            //client.close();
-            client.getConnectionManager().shutdown();
-        }
-    }
-
-    /*public static String convertStreamToString(java.io.InputStream is) {
-        java.util.Scanner s = new java.util.Scanner(is).useDelimiter("\\A");
-        return s.hasNext() ? s.next() : "";
-    }*/
-
-    protected boolean isPublic() {
-        return true;
-    }
 }

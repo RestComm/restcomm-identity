@@ -4,6 +4,10 @@
             <!-- the Demo code uses classes in these modules.  These are optional to import if you are not using
                  Apache Http Client or the HttpClientBuilder that comes with the adapter core -->
             <module name="org.apache.httpcomponents" slot="4.3"/>
+            <module name="org.jboss.resteasy.resteasy-jackson-provider" services="import"/>
         </dependencies>
+        <exclusions>
+            <module name="org.jboss.resteasy.resteasy-jackson2-provider"/>
+        </exclusions>        
     </deployment>
 </jboss-deployment-structure>
