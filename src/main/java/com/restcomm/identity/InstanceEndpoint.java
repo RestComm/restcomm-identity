@@ -1,26 +1,37 @@
 package com.restcomm.identity;
 
+import javax.servlet.http.HttpServletRequest;
 import javax.ws.rs.DELETE;
 import javax.ws.rs.FormParam;
-import javax.ws.rs.GET;
 import javax.ws.rs.PathParam;
 import javax.ws.rs.POST;
 import javax.ws.rs.Path;
 import javax.ws.rs.Produces;
+import javax.ws.rs.core.Context;
 import javax.ws.rs.core.MediaType;
 import javax.ws.rs.core.Response;
 import javax.ws.rs.core.Response.Status;
 
+import org.apache.http.HttpEntity;
+import org.apache.http.HttpResponse;
+import org.apache.http.client.HttpClient;
+import org.apache.http.client.methods.HttpGet;
+import org.apache.http.client.methods.HttpPost;
+import org.apache.http.entity.StringEntity;
 import org.apache.log4j.Logger;
+import org.keycloak.KeycloakSecurityContext;
+import org.keycloak.adapters.HttpClientBuilder;
 import org.keycloak.admin.client.Keycloak;
-import org.keycloak.admin.client.resource.ClientResource;
-import org.keycloak.admin.client.resource.ClientsResource;
+import org.keycloak.representations.AccessToken;
 import org.keycloak.representations.AccessTokenResponse;
 import org.keycloak.representations.idm.ClientRepresentation;
+import org.keycloak.util.JsonSerialization;
 import org.keycloak.representations.idm.RoleRepresentation;
+
 import com.google.gson.Gson;
 import com.restcomm.identity.model.CreateInstanceResponse;
 
+import java.io.IOException;
 import java.io.UnsupportedEncodingException;
 import java.util.ArrayList;
 import java.util.List;
@@ -28,9 +39,20 @@ import java.util.List;
 @Path("instances")
 public class InstanceEndpoint {
 
+    static class RolesRepresentation extends ArrayList<RoleRepresentation> {
+    }
+    static class AdminClientException extends Exception {
+
+        public AdminClientException(String message) {
+            super(message);
+            // TODO Auto-generated constructor stub
+        }
+
+    }
+
     static final Logger logger = Logger.getLogger(InstanceEndpoint.class.getName());
 
-    private static String authServerPrefix = "https://identity.restcomm.com:8443"; // port 8443 should be used for accessing server from inside. From outside use 443 instead (or blank)
+    private static String authServerPrefix = "https://identity.restcomm.com"; // port 8443 should be used for accessing server from inside. From outside use 443 instead (or blank)
     private static String ADMIN_USERNAME = "otsakir";
     private static String ADMIN_PASSWORD = "password";
     private static String ADMIN_CLIENT_ID = "restcomm-identity-rest";
@@ -38,8 +60,11 @@ public class InstanceEndpoint {
     private static String RESTCOMM_REALM = "restcomm";
 
     private Keycloak keycloak;
-    private AccessTokenResponse token;
+    private AccessTokenResponse registrarToken;
     private Gson gson;
+
+    @Context
+    HttpServletRequest request;
 
     public InstanceEndpoint() {
         gson = new Gson();
@@ -90,39 +115,65 @@ public class InstanceEndpoint {
         AccessTokenResponse tokenResponse = keycloak.tokenManager().getAccessToken();
     }
 
+    private AccessToken getRegistrarToken(HttpServletRequest request) {
+        KeycloakSecurityContext session = (KeycloakSecurityContext) request.getAttribute(KeycloakSecurityContext.class.getName());
+        return session.getToken();
+    }
+
     @POST
     @Produces("application/json")
     public Response createInstanceMethod(@FormParam(value = "name") String instanceName, @FormParam(value = "prefix") String prefix, @FormParam(value = "secret") String clientSecret) throws Exception {
         logger.info("Creating instance '" + instanceName + "'");
         initKeycloakClient();
 
-        // Create Restcomm application
-        String clientName = instanceName + "-restcomm-rest";
+        // get registrar username
+        String registrarUsername = null;
+        AccessToken registrarToken = getRegistrarToken(request);
+        if (registrarToken != null) {
+            registrarUsername = getRegistrarToken(request).getPreferredUsername();
+        } else {
+            logger.error("No token found for registrar user. Won't properly initialize roles to the user");
+        }
+
+        // initialize roles to be assigned to registrar
+        List<String> addedRoleNames = new ArrayList<String>();
+        addedRoleNames.add("Developer");
+        addedRoleNames.add("Admin");
+
+        // get a token for accessing the admin REST api
+        String adminToken = keycloak.tokenManager().getAccessTokenString();
+
+        // create Restcomm application
+        String clientName = getRestcommRestClientName(instanceName);
         ClientRepresentation clientRepr = createRestcommClient(clientName, prefix, clientSecret);
         keycloak.realm(getRestcommRealm()).clients().create(clientRepr);
-        RoleRepresentation role = new RoleRepresentation("Developer", "Instance Developer");
-        keycloak.realm(getRestcommRealm()).clients().get(clientName).roles().create(role);
+        addRolesToClient(addedRoleNames, clientName);
+        if ( registrarUsername != null )
+            addClientRolesToRegistarUser(clientName, addedRoleNames, registrarUsername, adminToken );
 
         // Create Restcomm UI application
-        clientName = instanceName + "-restcomm-ui";
+        clientName = getRestcommUiClientName(instanceName);
         clientRepr = createRestcommUiClient(clientName, prefix, clientSecret);
         keycloak.realm(getRestcommRealm()).clients().create(clientRepr);
-        role = new RoleRepresentation("Developer", "Instance Developer");
-        keycloak.realm(getRestcommRealm()).clients().get(clientName).roles().create(role);
+        addRolesToClient(addedRoleNames, clientName);
+        if ( registrarUsername != null )
+            addClientRolesToRegistarUser(clientName, addedRoleNames, registrarUsername, adminToken );
 
         // Create RVD application
-        clientName = instanceName + "-restcomm-rvd";
+        clientName = getRestcommRvdClientName(instanceName);
         clientRepr = createRvdClient(clientName, prefix, clientSecret);
         keycloak.realm(getRestcommRealm()).clients().create(clientRepr);
-        role = new RoleRepresentation("Developer", "Instance Developer");
-        keycloak.realm(getRestcommRealm()).clients().get(clientName).roles().create(role);
+        addRolesToClient(addedRoleNames, clientName);
+        if ( registrarUsername != null )
+            addClientRolesToRegistarUser(clientName, addedRoleNames, registrarUsername, adminToken );
 
         // Create RVD-UI application
-        clientName = instanceName + "-restcomm-rvd-ui";
+        clientName = getRestcommRvdUiClientName(instanceName);
         clientRepr = createRvdUiClient(clientName, prefix, clientSecret);
         keycloak.realm(getRestcommRealm()).clients().create(clientRepr);
-        role = new RoleRepresentation("Developer", "Instance Developer");
-        keycloak.realm(getRestcommRealm()).clients().get(clientName).roles().create(role);
+        addRolesToClient(addedRoleNames, clientName);
+        if ( registrarUsername != null )
+            addClientRolesToRegistarUser(clientName, addedRoleNames, registrarUsername, adminToken );
 
         CreateInstanceResponse responseModel = new CreateInstanceResponse();
         // TODO - normally, we should generate a random value and return it
@@ -131,14 +182,52 @@ public class InstanceEndpoint {
         return Response.ok(gson.toJson(responseModel), MediaType.APPLICATION_JSON).build();
     }
 
+    private void addClientRolesToRegistarUser(String clientName, List<String> roles, String username, String token ) {
+        for (String role: roles) {
+            RoleRepresentation roleRepr = getClientRoleRequest(clientName, role, token);
+            if (roleRepr != null)
+                addUserClientRoleRequest(username, clientName, roleRepr, token);
+        }
+    }
+
+    // TODO return the created role representation. It will allow not looking them up again again when granting registrar access.
+    private void addRolesToClient(List<String> roleNames, String clientName) {
+        for (String roleName: roleNames) {
+            RoleRepresentation role = new RoleRepresentation(roleName, roleName);
+            logger.info("Creating client role '" + clientName + ":" + roleName + "'");
+            keycloak.realm(getRestcommRealm()).clients().get(clientName).roles().create(role);
+        }
+    }
+
+    private static String getRestcommRestClientName(String instanceName) {
+        return instanceName + "-restcomm-rest";
+    }
+
+    private static String getRestcommUiClientName(String instanceName) {
+        return instanceName + "-restcomm-ui";
+    }
+
+    private static String getRestcommRvdClientName(String instanceName) {
+        return instanceName + "-restcomm-rvd";
+    }
+
+    private static String getRestcommRvdUiClientName(String instanceName) {
+        return instanceName + "-restcomm-rvd-ui";
+    }
+
     @DELETE
     @Path("/{instanceName}")
     public Response dropInstanceMethod(@PathParam("instanceName") String instanceName) {
+        if ( !validateInstanceName(instanceName) )
+            return Response.status(Status.BAD_REQUEST).build();
+
         initKeycloakClient();
         logger.info("Dropping instance '" + instanceName + "'");
 
-        if ( !validateInstanceName(instanceName) )
-            return Response.status(Status.BAD_REQUEST).build();
+        // TODO remove these
+        //AccessToken registrarToken = getRegistrarToken(request);
+        //String adminToken = keycloak.tokenManager().getAccessTokenString();
+
 
         String[] clientNames = {
                 instanceName + "-restcomm-rvd",
@@ -147,6 +236,7 @@ public class InstanceEndpoint {
                 instanceName + "-restcomm-ui"
         };
         for ( String clientName: clientNames) {
+            logger.info("Dropping client '" + clientName + "'");
             keycloak.realm(getRestcommRealm()).clients().get(clientName).remove();
         }
 
@@ -161,6 +251,66 @@ public class InstanceEndpoint {
             return false;
         }
         return true;
+    }
+
+    // returns the RoleRepresentation requested or null if not found
+    protected RoleRepresentation getClientRoleRequest(String clientName, String roleName, String token) {
+        HttpClient client = new HttpClientBuilder().disableTrustManager().build();
+        try {
+            // retrieve the
+            HttpGet request = new HttpGet(getAuthServerPrefix() + "/auth/admin/realms/" + getRestcommRealm() + "/clients/"+clientName+"/roles");
+            request.addHeader("Authorization", "Bearer " + token);
+            HttpResponse response = client.execute(request);
+            int status = response.getStatusLine().getStatusCode();
+            HttpEntity entity = response.getEntity();
+            if (status != 200 || entity == null ) {
+                throw new AdminClientException ("Request failed with status " + response.getStatusLine().toString());
+            }
+            RolesRepresentation roles = JsonSerialization.readValue(entity.getContent(), RolesRepresentation.class);
+            for (RoleRepresentation role: roles) {
+                if (role.getName().equals(roleName))
+                    return role;
+            }
+            throw new AdminClientException("Role '" + clientName + ":" + roleName + "' does not exist");
+        } catch (IllegalStateException | IOException e) {
+            throw new RuntimeException(e);
+        } catch (AdminClientException e) {
+            logger.error("Error retrieving roles for client '" + clientName + "'", e );
+        } finally {
+            //client.close();
+            client.getConnectionManager().shutdown();
+        }
+        return null;
+    }
+
+    // adds user client roles using the REST api. I couldn't find a way to that with admin-rest-client.
+    protected void addUserClientRoleRequest(String username, String clientName, RoleRepresentation roleRepr, String token) {
+        HttpClient client = new HttpClientBuilder().disableTrustManager().build();
+        try {
+            // retrieve the
+            HttpPost postRequest = new HttpPost(getAuthServerPrefix() + "/auth/admin/realms/" + getRestcommRealm() + "/users/" + username + "/role-mappings/clients/" + clientName);
+            postRequest.addHeader("Authorization", "Bearer " + token);
+            postRequest.addHeader("Content-Type","application/json");
+
+            RolesRepresentation rolesRepr = new RolesRepresentation();
+            rolesRepr.add(roleRepr);
+            String roleString = JsonSerialization.writeValueAsString(rolesRepr);
+            StringEntity stringBody = new StringEntity(roleString,"UTF-8");
+            postRequest.setEntity(stringBody);
+
+            HttpResponse response = client.execute(postRequest);
+            if (response.getStatusLine().getStatusCode() >= 300) {
+                throw new AdminClientException("Request failed with status " + response.getStatusLine().toString());
+            }
+            logger.info("Granted client role '" + clientName + ":" + roleRepr.getName() + "' to " + username );
+        } catch (IOException e1) {
+            throw new RuntimeException("Error granting client role '" + clientName + ":" + roleRepr.getName() + "' to user " + username, e1);
+        } catch (AdminClientException e) {
+            logger.error("Error granting client role '" + clientName + ":" + roleRepr.getName() + "' to user " + username, e);
+        } finally {
+            //client.close();
+            client.getConnectionManager().shutdown();
+        }
     }
 
     protected ClientRepresentation createRvdClient(String name, String prefix, String clientSecret) throws UnsupportedEncodingException, InstanceManagerException {
