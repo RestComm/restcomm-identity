@@ -52,7 +52,7 @@ public class InstanceEndpoint {
 
     static final Logger logger = Logger.getLogger(InstanceEndpoint.class.getName());
 
-    private static String authServerPrefix = "https://identity.restcomm.com"; // port 8443 should be used for accessing server from inside. From outside use 443 instead (or blank)
+    private static String authServerPrefix = "https://identity.restcomm.com:8443"; // port 8443 should be used for accessing server from inside. From outside use 443 instead (or blank)
     private static String ADMIN_USERNAME = "otsakir";
     private static String ADMIN_PASSWORD = "password";
     private static String ADMIN_CLIENT_ID = "restcomm-identity-rest";
