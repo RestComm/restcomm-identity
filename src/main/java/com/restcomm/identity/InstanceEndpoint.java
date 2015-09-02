@@ -22,6 +22,7 @@ import org.apache.log4j.Logger;
 import org.keycloak.KeycloakSecurityContext;
 import org.keycloak.adapters.HttpClientBuilder;
 import org.keycloak.admin.client.Keycloak;
+import org.keycloak.admin.client.resource.RealmResource;
 import org.keycloak.representations.AccessToken;
 import org.keycloak.representations.AccessTokenResponse;
 import org.keycloak.representations.idm.ClientRepresentation;
@@ -52,7 +53,7 @@ public class InstanceEndpoint {
 
     static final Logger logger = Logger.getLogger(InstanceEndpoint.class.getName());
 
-    private static String authServerPrefix = "https://identity.restcomm.com:8443"; // port 8443 should be used for accessing server from inside. From outside use 443 instead (or blank)
+    private static String authServerPrefix = "https://identity.restcomm.com"; // port 8443 should be used for accessing server from inside. From outside use 443 instead (or blank)
     private static String ADMIN_USERNAME = "otsakir";
     private static String ADMIN_PASSWORD = "password";
     private static String ADMIN_CLIENT_ID = "restcomm-identity-rest";
@@ -146,8 +147,19 @@ public class InstanceEndpoint {
         // create Restcomm application
         String clientName = getRestcommRestClientName(instanceName);
         ClientRepresentation clientRepr = createRestcommClient(clientName, prefix, clientSecret);
-        keycloak.realm(getRestcommRealm()).clients().create(clientRepr);
-        addRolesToClient(addedRoleNames, clientName);
+        //keycloak.realm(getRestcommRealm()).clients().create(clientRepr);
+        //addRolesToClient(addedRoleNames, clientName);
+
+        // hacking...
+        RealmResource realmResource = keycloak.realm(getRestcommRealm());
+        realmResource.clients().create(clientRepr);
+        for (String roleName: addedRoleNames) {
+            RoleRepresentation role = new RoleRepresentation(roleName, roleName);
+            logger.info("Creating client role '" + clientName + ":" + roleName + "'");
+            realmResource.clients().get(clientName).roles().create(role);
+        }
+
+        /*
         if ( registrarUsername != null )
             addClientRolesToRegistarUser(clientName, addedRoleNames, registrarUsername, adminToken );
 
@@ -174,7 +186,7 @@ public class InstanceEndpoint {
         addRolesToClient(addedRoleNames, clientName);
         if ( registrarUsername != null )
             addClientRolesToRegistarUser(clientName, addedRoleNames, registrarUsername, adminToken );
-
+*/
         CreateInstanceResponse responseModel = new CreateInstanceResponse();
         // TODO - normally, we should generate a random value and return it
         responseModel.setInstanceId(instanceName);
