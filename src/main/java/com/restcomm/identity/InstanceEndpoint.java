@@ -15,6 +15,7 @@ import javax.ws.rs.core.Response.Status;
 import org.apache.http.HttpEntity;
 import org.apache.http.HttpResponse;
 import org.apache.http.client.HttpClient;
+import org.apache.http.client.methods.HttpDelete;
 import org.apache.http.client.methods.HttpGet;
 import org.apache.http.client.methods.HttpPost;
 import org.apache.http.entity.StringEntity;
@@ -128,9 +129,11 @@ public class InstanceEndpoint {
 
         // get registrar username
         String registrarUsername = null;
+        String registrarUserId = null;
         AccessToken registrarToken = getRegistrarToken(request);
         if (registrarToken != null) {
-            registrarUsername = getRegistrarToken(request).getPreferredUsername();
+            registrarUsername = registrarToken.getPreferredUsername();
+            registrarUserId = registrarToken.getSubject();
         } else {
             logger.error("No token found for registrar user. Won't properly initialize roles to the user");
         }
@@ -144,42 +147,72 @@ public class InstanceEndpoint {
         String adminToken = keycloak.tokenManager().getAccessTokenString();
 
         // create Restcomm application
-        String clientName = getRestcommRestClientName(instanceName);
-        ClientRepresentation clientRepr = createRestcommClient(clientName, prefix, clientSecret);
-        keycloak.realm(getRestcommRealm()).clients().create(clientRepr);
-        addRolesToClient(addedRoleNames, clientName);
-        if ( registrarUsername != null )
-            addClientRolesToRegistarUser(clientName, addedRoleNames, registrarUsername, adminToken );
+        String clientId = getRestcommRestClientName(instanceName);
+        ClientRepresentation clientRepr = buildRestcommClientRepresentation(clientId, prefix, clientSecret);
+        createClientRequest(clientRepr, adminToken);
+        addRolesToClient(addedRoleNames, clientRepr.getId(), adminToken);
+        if ( registrarUserId != null )
+            addClientRolesToRegistarUser(clientRepr.getId(), addedRoleNames, registrarUserId, adminToken );
 
         // Create Restcomm UI application
-        clientName = getRestcommUiClientName(instanceName);
-        clientRepr = createRestcommUiClient(clientName, prefix, clientSecret);
-        keycloak.realm(getRestcommRealm()).clients().create(clientRepr);
-        addRolesToClient(addedRoleNames, clientName);
-        if ( registrarUsername != null )
-            addClientRolesToRegistarUser(clientName, addedRoleNames, registrarUsername, adminToken );
+        clientId = getRestcommUiClientName(instanceName);
+        clientRepr = buildRestcommUiClientRepresentation(clientId, prefix);
+        createClientRequest(clientRepr, adminToken);
+        addRolesToClient(addedRoleNames, clientRepr.getId(), adminToken);
+        if ( registrarUserId != null )
+            addClientRolesToRegistarUser(clientRepr.getId(), addedRoleNames, registrarUserId, adminToken );
 
         // Create RVD application
-        clientName = getRestcommRvdClientName(instanceName);
-        clientRepr = createRvdClient(clientName, prefix, clientSecret);
-        keycloak.realm(getRestcommRealm()).clients().create(clientRepr);
-        addRolesToClient(addedRoleNames, clientName);
-        if ( registrarUsername != null )
-            addClientRolesToRegistarUser(clientName, addedRoleNames, registrarUsername, adminToken );
+        clientId = getRestcommRvdClientName(instanceName);
+        clientRepr = buildRvdClientRepresentation(clientId, prefix, clientSecret);
+        createClientRequest(clientRepr, adminToken);
+        addRolesToClient(addedRoleNames, clientRepr.getId(), adminToken);
+        if ( registrarUserId != null )
+            addClientRolesToRegistarUser(clientRepr.getId(), addedRoleNames, registrarUserId, adminToken );
 
         // Create RVD-UI application
-        clientName = getRestcommRvdUiClientName(instanceName);
-        clientRepr = createRvdUiClient(clientName, prefix, clientSecret);
-        keycloak.realm(getRestcommRealm()).clients().create(clientRepr);
-        addRolesToClient(addedRoleNames, clientName);
-        if ( registrarUsername != null )
-            addClientRolesToRegistarUser(clientName, addedRoleNames, registrarUsername, adminToken );
+        clientId = getRestcommRvdUiClientName(instanceName);
+        clientRepr = buildRvdUiClientRepresentation(clientId, prefix);
+        createClientRequest(clientRepr, adminToken);
+        addRolesToClient(addedRoleNames, clientRepr.getId(), adminToken);
+        if ( registrarUserId != null )
+            addClientRolesToRegistarUser(clientRepr.getId(), addedRoleNames, registrarUserId, adminToken );
 
         CreateInstanceResponse responseModel = new CreateInstanceResponse();
         // TODO - normally, we should generate a random value and return it
         responseModel.setInstanceId(instanceName);
 
         return Response.ok(gson.toJson(responseModel), MediaType.APPLICATION_JSON).build();
+    }
+
+    @DELETE
+    @Path("/{instanceName}")
+    public Response dropInstanceMethod(@PathParam("instanceName") String instanceName) throws AdminClientException {
+        if ( !validateInstanceName(instanceName) )
+            return Response.status(Status.BAD_REQUEST).build();
+
+        initKeycloakClient();
+        String adminToken = keycloak.tokenManager().getAccessTokenString();
+
+        logger.info("Dropping instance '" + instanceName + "'");
+
+        // TODO remove these
+        //AccessToken registrarToken = getRegistrarToken(request);
+        //String adminToken = keycloak.tokenManager().getAccessTokenString();
+
+
+        String[] clientNames = {
+                instanceName + "-restcomm-rvd",
+                instanceName + "-restcomm-rvd-ui",
+                instanceName + "-restcomm-rest",
+                instanceName + "-restcomm-ui"
+        };
+        for ( String clientName: clientNames) {
+            dropClientRequest(clientName, adminToken);
+        }
+
+        return Response.status(Status.OK).build();
+        //return dropInstance(instanceName);
     }
 
     private void addClientRolesToRegistarUser(String clientName, List<String> roles, String username, String token ) {
@@ -191,11 +224,11 @@ public class InstanceEndpoint {
     }
 
     // TODO return the created role representation. It will allow not looking them up again again when granting registrar access.
-    private void addRolesToClient(List<String> roleNames, String clientName) {
+    private void addRolesToClient(List<String> roleNames, String clientName, String token) {
         for (String roleName: roleNames) {
             RoleRepresentation role = new RoleRepresentation(roleName, roleName);
             logger.info("Creating client role '" + clientName + ":" + roleName + "'");
-            keycloak.realm(getRestcommRealm()).clients().get(clientName).roles().create(role);
+            createClientRoleRequest(role, clientName, token);
         }
     }
 
@@ -213,35 +246,6 @@ public class InstanceEndpoint {
 
     private static String getRestcommRvdUiClientName(String instanceName) {
         return instanceName + "-restcomm-rvd-ui";
-    }
-
-    @DELETE
-    @Path("/{instanceName}")
-    public Response dropInstanceMethod(@PathParam("instanceName") String instanceName) {
-        if ( !validateInstanceName(instanceName) )
-            return Response.status(Status.BAD_REQUEST).build();
-
-        initKeycloakClient();
-        logger.info("Dropping instance '" + instanceName + "'");
-
-        // TODO remove these
-        //AccessToken registrarToken = getRegistrarToken(request);
-        //String adminToken = keycloak.tokenManager().getAccessTokenString();
-
-
-        String[] clientNames = {
-                instanceName + "-restcomm-rvd",
-                instanceName + "-restcomm-rvd-ui",
-                instanceName + "-restcomm-rest",
-                instanceName + "-restcomm-ui"
-        };
-        for ( String clientName: clientNames) {
-            logger.info("Dropping client '" + clientName + "'");
-            keycloak.realm(getRestcommRealm()).clients().get(clientName).remove();
-        }
-
-        return Response.status(Status.OK).build();
-        //return dropInstance(instanceName);
     }
 
     // make sure the name abides by the general instance naming convention. For now it acceptschecks all names
@@ -285,6 +289,7 @@ public class InstanceEndpoint {
 
     // adds user client roles using the REST api. I couldn't find a way to that with admin-rest-client.
     protected void addUserClientRoleRequest(String username, String clientName, RoleRepresentation roleRepr, String token) {
+        logger.info("Granting client role '" + clientName + ":" + roleRepr.getName() + "' to user '" + username + "'" );
         HttpClient client = new HttpClientBuilder().disableTrustManager().build();
         try {
             // retrieve the
@@ -302,7 +307,6 @@ public class InstanceEndpoint {
             if (response.getStatusLine().getStatusCode() >= 300) {
                 throw new AdminClientException("Request failed with status " + response.getStatusLine().toString());
             }
-            logger.info("Granted client role '" + clientName + ":" + roleRepr.getName() + "' to " + username );
         } catch (IOException e1) {
             throw new RuntimeException("Error granting client role '" + clientName + ":" + roleRepr.getName() + "' to user " + username, e1);
         } catch (AdminClientException e) {
@@ -313,14 +317,101 @@ public class InstanceEndpoint {
         }
     }
 
-    protected ClientRepresentation createRvdClient(String name, String prefix, String clientSecret) throws UnsupportedEncodingException, InstanceManagerException {
+    protected void createClientRequest(ClientRepresentation client_repr, String token) throws AdminClientException {
+        logger.info("Creating client '" + client_repr.getId() + "'");
+        HttpClient client = new HttpClientBuilder().disableTrustManager().build();
+        try {
+            //
+            HttpPost post = new HttpPost(getAuthServerPrefix() + "/auth/admin/realms/" + getRestcommRealm() + "/clients");
+            post.addHeader("Authorization", "Bearer " + token);
+            post.addHeader("Content-Type","application/json");
+
+            String data = JsonSerialization.writeValueAsString(client_repr);
+            StringEntity stringBody = new StringEntity(data,"UTF-8");
+            post.setEntity(stringBody);
+            try {
+                HttpResponse response = client.execute(post);
+                if (response.getStatusLine().getStatusCode() >= 300 || response.getEntity() == null)
+                    //throw new AdminClientException("Cannot create client '" + client_repr.getName() + "'. " + response.getStatusLine().getReasonPhrase() + " - " + response.getStatusLine().getStatusCode());
+                    throw new AdminClientException("Cannot create client '" + client_repr.getName() + "'");
+                return;
+            } catch (IOException e) {
+                logger.error(e);
+                throw new RuntimeException("Error creating client '" + client_repr.getName() + "'", e);
+            }
+
+        } catch (IOException e1) {
+            logger.error(e1);
+            throw new RuntimeException("Error creating client '" + client_repr.getName() + "'", e1);
+        } finally {
+            client.getConnectionManager().shutdown();
+        }
+    }
+
+    protected void dropClientRequest(String clientId, String token) throws AdminClientException {
+        logger.info("Dropping client '" + clientId + "'");
+        HttpClient client = new HttpClientBuilder().disableTrustManager().build();
+        try {
+            //
+            HttpDelete request = new HttpDelete(getAuthServerPrefix() + "/auth/admin/realms/" + getRestcommRealm() + "/clients/" + clientId);
+            request.addHeader("Authorization", "Bearer " + token);
+
+            try {
+                HttpResponse response = client.execute(request);
+                if (response.getStatusLine().getStatusCode() != 404 &&  (response.getStatusLine().getStatusCode() >= 300) )
+                    //throw new AdminClientException("Cannot create client '" + client_repr.getName() + "'. " + response.getStatusLine().getReasonPhrase() + " - " + response.getStatusLine().getStatusCode());
+                    throw new AdminClientException("Error removing client '" + clientId + "'");
+                else
+                if (response.getStatusLine().getStatusCode() == 404)
+                    logger.warn("Cannot drop client '" + clientId + "': Not found");
+                return;
+            } catch (IOException e) {
+                logger.error(e);
+                throw new RuntimeException("Error removing client '" + clientId + "'", e);
+            }
+
+        } finally {
+            client.getConnectionManager().shutdown();
+        }
+    }
+
+    protected Response createClientRoleRequest(RoleRepresentation role_repr, String clientName, String token) {
+        HttpClient client = new HttpClientBuilder().disableTrustManager().build();
+        try {
+            //admin/realms/{realm}/clients/{id}/roles
+            HttpPost post = new HttpPost(getAuthServerPrefix() + "/auth/admin/realms/" + getRestcommRealm() + "/clients/" + clientName + "/roles");
+            post.addHeader("Authorization", "Bearer " + token);
+            post.addHeader("Content-Type","application/json");
+
+            String data = JsonSerialization.writeValueAsString(role_repr);
+            StringEntity stringBody = new StringEntity(data,"UTF-8");
+            post.setEntity(stringBody);
+            try {
+                HttpResponse response = client.execute(post);
+                return Response.status(response.getStatusLine().getStatusCode()).build();
+            } catch (IOException e) {
+                logger.error(e);
+                throw new RuntimeException("Error creating client '" + role_repr.getName() + "'", e);
+            }
+
+        } catch (IOException e1) {
+            logger.error(e1);
+            throw new RuntimeException("Error creating client '" + role_repr.getName() + "'", e1);
+        } finally {
+            client.getConnectionManager().shutdown();
+        }
+
+
+    }
+
+    protected ClientRepresentation buildRestcommClientRepresentation(String name, String prefix, String clientSecret) throws UnsupportedEncodingException, InstanceManagerException {
         ClientRepresentation client_model = new ClientRepresentation();
-        client_model.setAdminUrl(prefix + "/restcomm-rvd/services");
-        client_model.setBaseUrl(prefix + "/restcomm-rvd/services");
+        //client_model.setAdminUrl(prefix + "/restcomm/keycloak");
+        client_model.setBaseUrl(prefix + "/");
         client_model.setSurrogateAuthRequired(false);
         client_model.setEnabled(true);
         client_model.setNotBefore(0);
-        client_model.setBearerOnly(true);
+        client_model.setBearerOnly(false);
         client_model.setConsentRequired(false);
         client_model.setDirectGrantsOnly(false);
         client_model.setPublicClient(false);
@@ -328,56 +419,7 @@ public class InstanceEndpoint {
         client_model.setFullScopeAllowed(true);
         client_model.setNodeReRegistrationTimeout(-1);
         client_model.setClientId(name);
-        client_model.setSecret(clientSecret);
-
-        //makeRequest(client_model);
-        return client_model;
-    }
-
-    protected ClientRepresentation createRvdUiClient(String name, String prefix, String clientSecret) throws UnsupportedEncodingException, InstanceManagerException {
-        ClientRepresentation client_model = new ClientRepresentation();
-        client_model.setBaseUrl(prefix + "/restcomm-rvd/index.html");
-        client_model.setSurrogateAuthRequired(false);
-        client_model.setEnabled(true);
-        client_model.setNotBefore(0);
-        client_model.setBearerOnly(false);
-        client_model.setConsentRequired(false);
-        client_model.setDirectGrantsOnly(false);
-        client_model.setPublicClient(true);
-        client_model.setFrontchannelLogout(false);
-        client_model.setFullScopeAllowed(true);
-        client_model.setNodeReRegistrationTimeout(-1);
-        client_model.setClientId(name);
-        client_model.setSecret(clientSecret);
-
-
-        List<String> redirectUris = new ArrayList<String>();
-        redirectUris.add(prefix + "/restcomm-rvd/*");
-        client_model.setRedirectUris(redirectUris);
-
-        List<String> webOrigins = new ArrayList<String>();
-        webOrigins.add(prefix);
-        client_model.setWebOrigins(webOrigins);
-
-        //makeRequest(client_model);
-        return client_model;
-    }
-
-    protected ClientRepresentation createRestcommClient(String name, String prefix, String clientSecret) throws UnsupportedEncodingException, InstanceManagerException {
-        ClientRepresentation client_model = new ClientRepresentation();
-        client_model.setAdminUrl(prefix + "/restcomm/keycloak");
-        client_model.setBaseUrl(prefix + "/restcomm/keycloak");
-        client_model.setSurrogateAuthRequired(false);
-        client_model.setEnabled(true);
-        client_model.setNotBefore(0);
-        client_model.setBearerOnly(false);
-        client_model.setConsentRequired(false);
-        client_model.setDirectGrantsOnly(false);
-        client_model.setPublicClient(false);
-        client_model.setFrontchannelLogout(false);
-        client_model.setFullScopeAllowed(true);
-        client_model.setNodeReRegistrationTimeout(-1);
-        client_model.setClientId(name);
+        client_model.setId(name);
         client_model.setSecret(clientSecret);
 
         List<String> redirectUris = new ArrayList<String>();
@@ -392,7 +434,7 @@ public class InstanceEndpoint {
         return client_model;
     }
 
-    protected ClientRepresentation createRestcommUiClient(String name, String prefix, String clientSecret) throws UnsupportedEncodingException, InstanceManagerException {
+    protected ClientRepresentation buildRestcommUiClientRepresentation(String name, String prefix) throws UnsupportedEncodingException, InstanceManagerException {
         ClientRepresentation client_model = new ClientRepresentation();
         client_model.setBaseUrl(prefix + "/index.html");
         client_model.setSurrogateAuthRequired(false);
@@ -405,11 +447,66 @@ public class InstanceEndpoint {
         client_model.setFrontchannelLogout(false);
         client_model.setFullScopeAllowed(true);
         client_model.setNodeReRegistrationTimeout(-1);
+        client_model.setId(name);
         client_model.setClientId(name);
-        client_model.setSecret(clientSecret);
+        client_model.setName(name);
+        //client_model.setSecret(clientSecret);
 
         List<String> redirectUris = new ArrayList<String>();
         redirectUris.add(prefix + "/*");
+        client_model.setRedirectUris(redirectUris);
+
+        List<String> webOrigins = new ArrayList<String>();
+        webOrigins.add(prefix);
+        client_model.setWebOrigins(webOrigins);
+
+        //makeRequest(client_model);
+        return client_model;
+    }
+
+
+    protected ClientRepresentation buildRvdClientRepresentation(String name, String prefix, String clientSecret) throws UnsupportedEncodingException, InstanceManagerException {
+        ClientRepresentation client_model = new ClientRepresentation();
+        //client_model.setAdminUrl(prefix + "/restcomm-rvd/services");
+        client_model.setBaseUrl(prefix + "/restcomm-rvd/services");
+        client_model.setSurrogateAuthRequired(false);
+        client_model.setEnabled(true);
+        client_model.setNotBefore(0);
+        client_model.setBearerOnly(true);
+        client_model.setConsentRequired(false);
+        client_model.setDirectGrantsOnly(false);
+        client_model.setPublicClient(false);
+        client_model.setFrontchannelLogout(false);
+        client_model.setFullScopeAllowed(true);
+        client_model.setNodeReRegistrationTimeout(-1);
+        client_model.setId(name);
+        client_model.setClientId(name);
+        client_model.setSecret(clientSecret);
+
+        //makeRequest(client_model);
+        return client_model;
+    }
+
+    protected ClientRepresentation buildRvdUiClientRepresentation(String name, String prefix) throws UnsupportedEncodingException, InstanceManagerException {
+        ClientRepresentation client_model = new ClientRepresentation();
+        client_model.setBaseUrl(prefix + "/restcomm-rvd/index.html");
+        client_model.setSurrogateAuthRequired(false);
+        client_model.setEnabled(true);
+        client_model.setNotBefore(0);
+        client_model.setBearerOnly(false);
+        client_model.setConsentRequired(false);
+        client_model.setDirectGrantsOnly(false);
+        client_model.setPublicClient(true);
+        client_model.setFrontchannelLogout(false);
+        client_model.setFullScopeAllowed(true);
+        client_model.setNodeReRegistrationTimeout(-1);
+        client_model.setId(name);
+        client_model.setClientId(name);
+        //client_model.setSecret(clientSecret);
+
+
+        List<String> redirectUris = new ArrayList<String>();
+        redirectUris.add(prefix + "/restcomm-rvd/*");
         client_model.setRedirectUris(redirectUris);
 
         List<String> webOrigins = new ArrayList<String>();
