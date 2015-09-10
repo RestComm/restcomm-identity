@@ -30,6 +30,7 @@ import org.keycloak.util.JsonSerialization;
 import org.keycloak.representations.idm.RoleRepresentation;
 
 import com.google.gson.Gson;
+import com.restcomm.identity.configuration.Configuration;
 import com.restcomm.identity.model.CreateInstanceResponse;
 
 import java.io.IOException;
@@ -39,6 +40,7 @@ import java.util.List;
 
 @Path("instances")
 public class InstanceEndpoint {
+    static final Logger logger = Logger.getLogger(InstanceEndpoint.class.getName());
 
     static class RolesRepresentation extends ArrayList<RoleRepresentation> {
     }
@@ -51,67 +53,21 @@ public class InstanceEndpoint {
 
     }
 
-    static final Logger logger = Logger.getLogger(InstanceEndpoint.class.getName());
-
-    private static String authServerPrefix = "https://identity.restcomm.com:8443"; // port 8443 should be used for accessing server from inside. From outside use 443 instead (or blank)
-    private static String ADMIN_USERNAME = "otsakir";
-    private static String ADMIN_PASSWORD = "password";
-    private static String ADMIN_CLIENT_ID = "restcomm-identity-rest";
-    //private static String ADMIN_CLIENT_SECRET = "a735a223-2760-4248-bb34-744176b8b931"; // open the realm-management client and go to 'Credentials' to find it
-    private static String RESTCOMM_REALM = "restcomm";
-
     private Keycloak keycloak;
-    private AccessTokenResponse registrarToken;
     private Gson gson;
+    private Configuration configuration;
 
     @Context
     HttpServletRequest request;
 
     public InstanceEndpoint() {
         gson = new Gson();
+        configuration = Configuration.get();
     }
 
-    public static String getAuthServerPrefix() {
-        return authServerPrefix;
-    }
-
-    public static String getAdminUsername() {
-        return ADMIN_USERNAME;
-    }
-
-    public static String getAdminPassword() {
-        return ADMIN_PASSWORD;
-    }
-
-    public static String getAdminClientId() {
-        return ADMIN_CLIENT_ID;
-    }
-
-    //public static String getAdminClientSecret() {
-    //    return ADMIN_CLIENT_SECRET;
-    //}
-
-    public static String getRestcommRealm() {
-        return RESTCOMM_REALM;
-    }
-/*
-    @GET
-    @Path("/test")
-    public Response test() {
-        String authServer = getAuthServerPrefix() + "/auth";
-        Keycloak keycloak = Keycloak.getInstance(authServer, "restcomm", getAdminUsername(), getAdminPassword(), "restcomm-identity-rest" );
-
-        AccessTokenResponse tokenResponse = keycloak.tokenManager().getAccessToken();
-        ClientsResource clients = keycloak.realm("restcomm").clients();
-        ClientResource client = clients.get("otsakir-39cd4940-restcomm-rvd");
-        ClientRepresentation representation = client.toRepresentation();
-
-        return Response.ok().build();
-    }
-*/
     private void initKeycloakClient() {
-        String authServer = getAuthServerPrefix() + "/auth";
-        this.keycloak = Keycloak.getInstance(authServer, "restcomm", getAdminUsername(), getAdminPassword(), getAdminClientId());
+        String authServer = configuration.getAuthServerUrlBase() + "/auth";
+        this.keycloak = Keycloak.getInstance(authServer, "restcomm", configuration.getAdminUsername(), configuration.getAdminPassword(), Configuration.DEFAULT_ADMIN_CLIENT_ID);
         // Retrieve a token
         AccessTokenResponse tokenResponse = keycloak.tokenManager().getAccessToken();
     }
@@ -262,7 +218,7 @@ public class InstanceEndpoint {
         HttpClient client = new HttpClientBuilder().disableTrustManager().build();
         try {
             // retrieve the
-            HttpGet request = new HttpGet(getAuthServerPrefix() + "/auth/admin/realms/" + getRestcommRealm() + "/clients/"+clientName+"/roles");
+            HttpGet request = new HttpGet(configuration.getAuthServerUrlBase() + "/auth/admin/realms/" + configuration.getRestcommRealm() + "/clients/"+clientName+"/roles");
             request.addHeader("Authorization", "Bearer " + token);
             HttpResponse response = client.execute(request);
             int status = response.getStatusLine().getStatusCode();
@@ -293,7 +249,7 @@ public class InstanceEndpoint {
         HttpClient client = new HttpClientBuilder().disableTrustManager().build();
         try {
             // retrieve the
-            HttpPost postRequest = new HttpPost(getAuthServerPrefix() + "/auth/admin/realms/" + getRestcommRealm() + "/users/" + username + "/role-mappings/clients/" + clientName);
+            HttpPost postRequest = new HttpPost(configuration.getAuthServerUrlBase() + "/auth/admin/realms/" + configuration.getRestcommRealm() + "/users/" + username + "/role-mappings/clients/" + clientName);
             postRequest.addHeader("Authorization", "Bearer " + token);
             postRequest.addHeader("Content-Type","application/json");
 
@@ -322,7 +278,7 @@ public class InstanceEndpoint {
         HttpClient client = new HttpClientBuilder().disableTrustManager().build();
         try {
             //
-            HttpPost post = new HttpPost(getAuthServerPrefix() + "/auth/admin/realms/" + getRestcommRealm() + "/clients");
+            HttpPost post = new HttpPost(configuration.getAuthServerUrlBase() + "/auth/admin/realms/" + configuration.getRestcommRealm() + "/clients");
             post.addHeader("Authorization", "Bearer " + token);
             post.addHeader("Content-Type","application/json");
 
@@ -353,7 +309,7 @@ public class InstanceEndpoint {
         HttpClient client = new HttpClientBuilder().disableTrustManager().build();
         try {
             //
-            HttpDelete request = new HttpDelete(getAuthServerPrefix() + "/auth/admin/realms/" + getRestcommRealm() + "/clients/" + clientId);
+            HttpDelete request = new HttpDelete(configuration.getAuthServerUrlBase() + "/auth/admin/realms/" + configuration.getRestcommRealm() + "/clients/" + clientId);
             request.addHeader("Authorization", "Bearer " + token);
 
             try {
@@ -379,7 +335,7 @@ public class InstanceEndpoint {
         HttpClient client = new HttpClientBuilder().disableTrustManager().build();
         try {
             //admin/realms/{realm}/clients/{id}/roles
-            HttpPost post = new HttpPost(getAuthServerPrefix() + "/auth/admin/realms/" + getRestcommRealm() + "/clients/" + clientName + "/roles");
+            HttpPost post = new HttpPost(configuration.getAuthServerUrlBase() + "/auth/admin/realms/" + configuration.getRestcommRealm() + "/clients/" + clientName + "/roles");
             post.addHeader("Authorization", "Bearer " + token);
             post.addHeader("Content-Type","application/json");
 

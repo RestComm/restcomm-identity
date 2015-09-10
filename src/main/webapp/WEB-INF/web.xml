@@ -23,13 +23,21 @@
 	</context-param>
 	-->
 	
+	<servlet>
+		<servlet-name>RI Initialization Servlet</servlet-name>
+		<servlet-class>com.restcomm.identity.bootstrap.RestcommIdentityInitializationServlet</servlet-class>
+		<load-on-startup>2</load-on-startup>
+	</servlet>
+	
     <security-constraint>
         <web-resource-collection>
             <url-pattern>/api/*</url-pattern>
         </web-resource-collection>
+        <!-- 
         <auth-constraint>
             <role-name>user</role-name>
         </auth-constraint>
+        -->
     </security-constraint>
 
     <login-config>

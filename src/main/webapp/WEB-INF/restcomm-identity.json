@@ -1,0 +1,5 @@
+{
+  "authServerUrlBase": "https://identity.restcomm.com:8443",
+  "adminUsername": "riAdmin",
+  "adminPassword": "password"
+}
