@@ -1,6 +1,8 @@
 package com.restcomm.identity;
 
 import java.io.IOException;
+import java.net.URI;
+import java.net.URISyntaxException;
 
 import javax.ws.rs.core.Response;
 
@@ -11,6 +13,7 @@ import org.apache.http.client.methods.HttpDelete;
 import org.apache.http.client.methods.HttpGet;
 import org.apache.http.client.methods.HttpPost;
 import org.apache.http.client.methods.HttpPut;
+import org.apache.http.client.utils.URIBuilder;
 import org.apache.http.entity.StringEntity;
 import org.apache.log4j.Logger;
 import org.keycloak.adapters.HttpClientBuilder;
@@ -21,6 +24,7 @@ import org.keycloak.representations.idm.UserRepresentation;
 import org.keycloak.util.JsonSerialization;
 
 import com.restcomm.identity.InstanceEndpoint.RolesRepresentation;
+import com.restcomm.identity.InstanceEndpoint.UsersRepresentation;
 import com.restcomm.identity.configuration.Configuration;
 
 public class AdminClient {
@@ -60,6 +64,34 @@ public class AdminClient {
             client.getConnectionManager().shutdown();
         }
         return null;
+    }
+    
+    public UserRepresentation getUserByUsername(String username, String token) {
+        HttpClient client = new HttpClientBuilder().disableTrustManager().build();
+        try {
+            // retrieve the
+            URI uri = new URIBuilder(configuration.getAuthServerUrlBase() + "/auth/admin/realms/" + configuration.getRestcommRealm() + "/users").addParameter("username", username).build();
+            HttpGet request = new HttpGet(uri);
+            request.addHeader("Authorization", "Bearer " + token);
+            HttpResponse response = client.execute(request);
+            int status = response.getStatusLine().getStatusCode();
+            HttpEntity entity = response.getEntity();
+            if (status == 200) {
+                UsersRepresentation users = JsonSerialization.readValue(entity.getContent(), UsersRepresentation.class);
+                for (UserRepresentation user: users)
+                    return user; // return first user found
+                return null; // no users found
+            } else {
+                logger.error("Error searching for user '" + username + "' - " + response.getStatusLine().toString());
+                return null;
+            }
+        } catch (IllegalStateException | IOException e) {
+            throw new RuntimeException(e);
+        } catch (URISyntaxException e) {
+            throw new RuntimeException("Error searching for user '" + username + "'" );
+        } finally {
+            client.getConnectionManager().shutdown();
+        }
     }
 
     // adds user client roles using the REST api.

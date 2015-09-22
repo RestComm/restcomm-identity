@@ -39,6 +39,8 @@ public class InstanceEndpoint {
 
     static class RolesRepresentation extends ArrayList<RoleRepresentation> {
     }
+    static class UsersRepresentation extends ArrayList<UserRepresentation> {
+    }
 
     private Keycloak keycloak;
     private Gson gson;
@@ -180,6 +182,25 @@ public class InstanceEndpoint {
         Response resetResponse = client.resetUserPassword(creds, adminToken, userId);
 
         // then grant this user access to restcomm instances
+        addClientRolesToUser(getRestcommRestClientName(instanceId), getDefaultDeveloperRoles(), userId, adminToken);
+        addClientRolesToUser(getRestcommUiClientName(instanceId), getDefaultDeveloperRoles(), userId, adminToken);
+        addClientRolesToUser(getRestcommRvdClientName(instanceId), getDefaultDeveloperRoles(), userId, adminToken);
+        addClientRolesToUser(getRestcommRvdUiClientName(instanceId), getDefaultDeveloperRoles(), userId, adminToken);
+
+        return Response.ok().build();
+    }
+
+    @POST
+    @Path("/{instanceId}/users/{username}/invite")
+    public Response inviteUserToInstance(@PathParam("instanceId") String instanceId, @PathParam("username") String username) {
+        initKeycloakClient();
+        String adminToken = keycloak.tokenManager().getAccessTokenString();
+
+        UserRepresentation userRepr = client.getUserByUsername(username, adminToken);
+        if (userRepr == null)
+            return Response.status(Status.NOT_FOUND).build();
+        String userId = userRepr.getId();
+        // grant access to instance applications
         addClientRolesToUser(getRestcommRestClientName(instanceId), getDefaultDeveloperRoles(), userId, adminToken);
         addClientRolesToUser(getRestcommUiClientName(instanceId), getDefaultDeveloperRoles(), userId, adminToken);
         addClientRolesToUser(getRestcommRvdClientName(instanceId), getDefaultDeveloperRoles(), userId, adminToken);
