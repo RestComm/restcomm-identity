@@ -201,10 +201,18 @@ public class InstanceEndpoint {
             return Response.status(Status.NOT_FOUND).build();
         String userId = userRepr.getId();
         // grant access to instance applications
-        addClientRolesToUser(getRestcommRestClientName(instanceId), getDefaultDeveloperRoles(), userId, adminToken);
-        addClientRolesToUser(getRestcommUiClientName(instanceId), getDefaultDeveloperRoles(), userId, adminToken);
-        addClientRolesToUser(getRestcommRvdClientName(instanceId), getDefaultDeveloperRoles(), userId, adminToken);
-        addClientRolesToUser(getRestcommRvdUiClientName(instanceId), getDefaultDeveloperRoles(), userId, adminToken);
+        boolean ok = true;
+        if ( ! addClientRolesToUser(getRestcommRestClientName(instanceId), getDefaultDeveloperRoles(), userId, adminToken) )
+            ok = false;
+        if (! addClientRolesToUser(getRestcommUiClientName(instanceId), getDefaultDeveloperRoles(), userId, adminToken) )
+            ok = false;
+        if ( ! addClientRolesToUser(getRestcommRvdClientName(instanceId), getDefaultDeveloperRoles(), userId, adminToken) )
+            ok = false;
+        if ( ! addClientRolesToUser(getRestcommRvdUiClientName(instanceId), getDefaultDeveloperRoles(), userId, adminToken) )
+            ok = false;
+
+        if ( !ok )
+            return Response.status(Status.NOT_FOUND).build(); // best guess for error. It is pointless to try to return an actual error code in this complex fault tolerant operation
 
         return Response.ok().build();
     }
@@ -277,12 +285,17 @@ public class InstanceEndpoint {
         return userRepr;
     }
 
-    private void addClientRolesToUser(String clientName, List<String> roles, String username, String token ) {
+    // returns true if every single operation was successfull or false otherwise
+    private boolean addClientRolesToUser(String clientName, List<String> roles, String username, String token ) {
+        boolean ok = true;
         for (String role: roles) {
             RoleRepresentation roleRepr = client.getClientRoleRequest(clientName, role, token);
             if (roleRepr != null)
                 client.addUserClientRoleRequest(username, clientName, roleRepr, token);
+            else
+                ok = false;
         }
+        return ok;
     }
 
     // TODO return the created role representation. It will allow not looking them up again again when granting registrar access.
