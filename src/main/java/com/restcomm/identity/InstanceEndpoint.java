@@ -12,60 +12,30 @@ import javax.ws.rs.core.MediaType;
 import javax.ws.rs.core.Response;
 import javax.ws.rs.core.Response.Status;
 
-import org.apache.http.HttpResponse;
 import org.apache.log4j.Logger;
-import org.keycloak.KeycloakSecurityContext;
-import org.keycloak.admin.client.Keycloak;
 import org.keycloak.representations.AccessToken;
-import org.keycloak.representations.AccessTokenResponse;
 import org.keycloak.representations.idm.ClientRepresentation;
-import org.keycloak.representations.idm.CredentialRepresentation;
-import org.keycloak.representations.idm.RoleRepresentation;
 import org.keycloak.representations.idm.UserRepresentation;
 
 import com.google.gson.Gson;
 import com.restcomm.identity.AdminClient.AdminClientException;
 import com.restcomm.identity.configuration.Configuration;
 import com.restcomm.identity.model.CreateInstanceResponse;
-import com.restcomm.identity.model.UserEntity;
-
 import java.io.UnsupportedEncodingException;
 import java.util.ArrayList;
 import java.util.List;
 
 @Path("instances")
-public class InstanceEndpoint {
+public class InstanceEndpoint extends Endpoint {
     static final Logger logger = Logger.getLogger(InstanceEndpoint.class.getName());
 
-    static class RolesRepresentation extends ArrayList<RoleRepresentation> {
-    }
-    static class UsersRepresentation extends ArrayList<UserRepresentation> {
-    }
-
-    private Keycloak keycloak;
     private Gson gson;
-    private Configuration configuration;
-    private AdminClient client;
 
     @Context
     HttpServletRequest request;
 
     public InstanceEndpoint() {
         gson = new Gson();
-        configuration = Configuration.get();
-        client = new AdminClient(configuration);
-    }
-
-    private void initKeycloakClient() {
-        String authServer = configuration.getAuthServerUrlBase() + "/auth";
-        this.keycloak = Keycloak.getInstance(authServer, "restcomm", configuration.getAdminUsername(), configuration.getAdminPassword(), Configuration.DEFAULT_ADMIN_CLIENT_ID);
-        // Retrieve a token
-        AccessTokenResponse tokenResponse = keycloak.tokenManager().getAccessToken();
-    }
-
-    private AccessToken getRequesterToken(HttpServletRequest request) {
-        KeycloakSecurityContext session = (KeycloakSecurityContext) request.getAttribute(KeycloakSecurityContext.class.getName());
-        return session.getToken();
     }
 
     @POST
@@ -94,36 +64,36 @@ public class InstanceEndpoint {
         String adminToken = keycloak.tokenManager().getAccessTokenString();
 
         // create Restcomm application
-        String clientId = getRestcommRestClientName(instanceName);
+        String clientId = Configuration.getRestcommRestClientName(instanceName);
         ClientRepresentation clientRepr = buildRestcommClientRepresentation(clientId, prefix, clientSecret);
         client.createClientRequest(clientRepr, adminToken);
-        addRolesToClient(addedRoleNames, clientRepr.getId(), adminToken);
+        client.addRolesToClient(addedRoleNames, clientRepr.getId(), adminToken);
         if ( registrarUserId != null )
-            addClientRolesToUser(clientRepr.getId(), addedRoleNames, registrarUserId, adminToken );
+            client.addClientRolesToUser(clientRepr.getId(), addedRoleNames, registrarUserId, adminToken );
 
         // Create Restcomm UI application
-        clientId = getRestcommUiClientName(instanceName);
+        clientId = Configuration.getRestcommUiClientName(instanceName);
         clientRepr = buildRestcommUiClientRepresentation(clientId, prefix);
         client.createClientRequest(clientRepr, adminToken);
-        addRolesToClient(addedRoleNames, clientRepr.getId(), adminToken);
+        client.addRolesToClient(addedRoleNames, clientRepr.getId(), adminToken);
         if ( registrarUserId != null )
-            addClientRolesToUser(clientRepr.getId(), addedRoleNames, registrarUserId, adminToken );
+            client.addClientRolesToUser(clientRepr.getId(), addedRoleNames, registrarUserId, adminToken );
 
         // Create RVD application
-        clientId = getRestcommRvdClientName(instanceName);
+        clientId = Configuration.getRestcommRvdClientName(instanceName);
         clientRepr = buildRvdClientRepresentation(clientId, prefix, clientSecret);
         client.createClientRequest(clientRepr, adminToken);
-        addRolesToClient(addedRoleNames, clientRepr.getId(), adminToken);
+        client.addRolesToClient(addedRoleNames, clientRepr.getId(), adminToken);
         if ( registrarUserId != null )
-            addClientRolesToUser(clientRepr.getId(), addedRoleNames, registrarUserId, adminToken );
+            client.addClientRolesToUser(clientRepr.getId(), addedRoleNames, registrarUserId, adminToken );
 
         // Create RVD-UI application
-        clientId = getRestcommRvdUiClientName(instanceName);
+        clientId = Configuration.getRestcommRvdUiClientName(instanceName);
         clientRepr = buildRvdUiClientRepresentation(clientId, prefix);
         client.createClientRequest(clientRepr, adminToken);
-        addRolesToClient(addedRoleNames, clientRepr.getId(), adminToken);
+        client.addRolesToClient(addedRoleNames, clientRepr.getId(), adminToken);
         if ( registrarUserId != null )
-            addClientRolesToUser(clientRepr.getId(), addedRoleNames, registrarUserId, adminToken );
+            client.addClientRolesToUser(clientRepr.getId(), addedRoleNames, registrarUserId, adminToken );
 
         CreateInstanceResponse responseModel = new CreateInstanceResponse();
         // TODO - normally, we should generate a random value and return it
@@ -157,6 +127,7 @@ public class InstanceEndpoint {
         //return dropInstance(instanceName);
     }
 
+    /*
     @POST
     @Path("/{instance}/users")
     public Response createInstanceUser(UserEntity user, @PathParam("instance") String instanceId) {
@@ -175,20 +146,21 @@ public class InstanceEndpoint {
         }
 
         String userResourceUrl = createResponse.getFirstHeader("Location").getValue();
-        String userId = extractUserIdFromResourceUrl(userResourceUrl);
+        String userId = client.extractUserIdFromResourceUrl(userResourceUrl);
 
         // assign credentials (password)
         CredentialRepresentation creds = buildCredentialsRepresentation(user);
         Response resetResponse = client.resetUserPassword(creds, adminToken, userId);
 
         // then grant this user access to restcomm instances
-        addClientRolesToUser(getRestcommRestClientName(instanceId), getDefaultDeveloperRoles(), userId, adminToken);
-        addClientRolesToUser(getRestcommUiClientName(instanceId), getDefaultDeveloperRoles(), userId, adminToken);
-        addClientRolesToUser(getRestcommRvdClientName(instanceId), getDefaultDeveloperRoles(), userId, adminToken);
-        addClientRolesToUser(getRestcommRvdUiClientName(instanceId), getDefaultDeveloperRoles(), userId, adminToken);
+        client.addClientRolesToUser(Configuration.getRestcommRestClientName(instanceId), getDefaultDeveloperRoles(), userId, adminToken);
+        client.addClientRolesToUser(Configuration.getRestcommUiClientName(instanceId), getDefaultDeveloperRoles(), userId, adminToken);
+        client.addClientRolesToUser(Configuration.getRestcommRvdClientName(instanceId), getDefaultDeveloperRoles(), userId, adminToken);
+        client.addClientRolesToUser(Configuration.getRestcommRvdUiClientName(instanceId), getDefaultDeveloperRoles(), userId, adminToken);
 
         return Response.ok().build();
     }
+    */
 
     @POST
     @Path("/{instanceId}/users/{username}/invite")
@@ -202,125 +174,19 @@ public class InstanceEndpoint {
         String userId = userRepr.getId();
         // grant access to instance applications
         boolean ok = true;
-        if ( ! addClientRolesToUser(getRestcommRestClientName(instanceId), getDefaultDeveloperRoles(), userId, adminToken) )
+        if ( ! client.addClientRolesToUser(Configuration.getRestcommRestClientName(instanceId), configuration.getDefaultDeveloperRoles(), userId, adminToken) )
             ok = false;
-        if (! addClientRolesToUser(getRestcommUiClientName(instanceId), getDefaultDeveloperRoles(), userId, adminToken) )
+        if (! client.addClientRolesToUser(Configuration.getRestcommUiClientName(instanceId), configuration.getDefaultDeveloperRoles(), userId, adminToken) )
             ok = false;
-        if ( ! addClientRolesToUser(getRestcommRvdClientName(instanceId), getDefaultDeveloperRoles(), userId, adminToken) )
+        if ( ! client.addClientRolesToUser(Configuration.getRestcommRvdClientName(instanceId), configuration.getDefaultDeveloperRoles(), userId, adminToken) )
             ok = false;
-        if ( ! addClientRolesToUser(getRestcommRvdUiClientName(instanceId), getDefaultDeveloperRoles(), userId, adminToken) )
+        if ( ! client.addClientRolesToUser(Configuration.getRestcommRvdUiClientName(instanceId), configuration.getDefaultDeveloperRoles(), userId, adminToken) )
             ok = false;
 
         if ( !ok )
             return Response.status(Status.NOT_FOUND).build(); // best guess for error. It is pointless to try to return an actual error code in this complex fault tolerant operation
 
         return Response.ok().build();
-    }
-
-    // TODO - move this to a new UsersEndpoint
-    @POST
-    @Path("/users")
-    public Response createUser(UserEntity user) {
-        initKeycloakClient();
-        String adminToken = keycloak.tokenManager().getAccessTokenString();
-
-        UserRepresentation userRepr = buildUserRepresentation(user);
-        // first created an isolated user entity with no access to restcomm instance applications
-        HttpResponse response = client.createUserRequest(userRepr, adminToken);
-        int status = response.getStatusLine().getStatusCode();
-        if ( status != 201) {
-            if (status == 409 )
-                return Response.status(409).build();
-            else
-                return Response.status(400).build();
-        }
-
-        String userResourceUrl = response.getFirstHeader("Location").getValue();
-        String userId = extractUserIdFromResourceUrl(userResourceUrl);
-
-        // assign credentials (password)
-        CredentialRepresentation creds = buildCredentialsRepresentation(user);
-        client.resetUserPassword(creds, adminToken, userId);
-
-        // then grant this user access to restcomm instances
-        List<String> memberOf = user.getMemberOf();
-        if ( memberOf != null ) {
-            for ( String instanceId: memberOf ) {
-                addClientRolesToUser(getRestcommRestClientName(instanceId), getDefaultDeveloperRoles(), userId, adminToken);
-                addClientRolesToUser(getRestcommUiClientName(instanceId), getDefaultDeveloperRoles(), userId, adminToken);
-                addClientRolesToUser(getRestcommRvdClientName(instanceId), getDefaultDeveloperRoles(), userId, adminToken);
-                addClientRolesToUser(getRestcommRvdUiClientName(instanceId), getDefaultDeveloperRoles(), userId, adminToken);
-
-            }
-        }
-
-        return Response.ok().build();
-    }
-
-    String extractUserIdFromResourceUrl(String location) {
-        String userId = location.substring( location.lastIndexOf("/")+1 );
-        return userId;
-    }
-
-
-    private CredentialRepresentation buildCredentialsRepresentation(UserEntity user) {
-        // prepare credentials
-        CredentialRepresentation credRepr = new CredentialRepresentation();
-        credRepr.setType("password");
-        credRepr.setValue(user.getPassword());
-        credRepr.setTemporary(false); // NOT temporary - Hardcoded for now
-        return credRepr;
-    }
-
-    private UserRepresentation buildUserRepresentation(UserEntity user) {
-
-        // prepare user
-        UserRepresentation userRepr = new UserRepresentation();
-        userRepr.setUsername(user.getUsername());
-        userRepr.setFirstName(user.getFirstname());
-        userRepr.setLastName(user.getLastname());
-        //userRepr.setCredentials(creds);
-        userRepr.setEnabled(true);
-
-        return userRepr;
-    }
-
-    // returns true if every single operation was successfull or false otherwise
-    private boolean addClientRolesToUser(String clientName, List<String> roles, String username, String token ) {
-        boolean ok = true;
-        for (String role: roles) {
-            RoleRepresentation roleRepr = client.getClientRoleRequest(clientName, role, token);
-            if (roleRepr != null)
-                client.addUserClientRoleRequest(username, clientName, roleRepr, token);
-            else
-                ok = false;
-        }
-        return ok;
-    }
-
-    // TODO return the created role representation. It will allow not looking them up again again when granting registrar access.
-    private void addRolesToClient(List<String> roleNames, String clientName, String token) {
-        for (String roleName: roleNames) {
-            RoleRepresentation role = new RoleRepresentation(roleName, roleName);
-            logger.info("Creating client role '" + clientName + ":" + roleName + "'");
-            client.createClientRoleRequest(role, clientName, token);
-        }
-    }
-
-    private static String getRestcommRestClientName(String instanceName) {
-        return instanceName + "-restcomm-rest";
-    }
-
-    private static String getRestcommUiClientName(String instanceName) {
-        return instanceName + "-restcomm-ui";
-    }
-
-    private static String getRestcommRvdClientName(String instanceName) {
-        return instanceName + "-restcomm-rvd";
-    }
-
-    private static String getRestcommRvdUiClientName(String instanceName) {
-        return instanceName + "-restcomm-rvd-ui";
     }
 
     // make sure the name abides by the general instance naming convention. For now it acceptschecks all names
@@ -446,6 +312,7 @@ public class InstanceEndpoint {
         return client_model;
     }
 
+    /*
     protected List<String> getDefaultAdminRoles() {
         List<String> addedRoleNames = new ArrayList<String>();
         addedRoleNames.add("Developer");
@@ -457,5 +324,5 @@ public class InstanceEndpoint {
         List<String> addedRoleNames = new ArrayList<String>();
         addedRoleNames.add("Developer");
         return addedRoleNames;
-    }
+    }*/
 }

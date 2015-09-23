@@ -2,6 +2,8 @@ package com.restcomm.identity.configuration;
 
 import java.io.FileNotFoundException;
 import java.io.FileReader;
+import java.util.ArrayList;
+import java.util.List;
 
 import javax.servlet.ServletContext;
 
@@ -70,9 +72,31 @@ public class Configuration {
     public String getAdminPassword() {
         return source.getAdminPassword();
     }
-    
+
     public String getRestcommRealm() {
         return DEFAULT_RESTCOMM_REALM;
     }
+
+    public static String getRestcommRestClientName(String instanceName) {
+        return instanceName + "-restcomm-rest";
+    }
+
+    public static String getRestcommUiClientName(String instanceName) {
+        return instanceName + "-restcomm-ui";
+    }
+
+    public static String getRestcommRvdClientName(String instanceName) {
+        return instanceName + "-restcomm-rvd";
+    }
+
+    public static String getRestcommRvdUiClientName(String instanceName) {
+        return instanceName + "-restcomm-rvd-ui";
+    }
     
+    public List<String> getDefaultDeveloperRoles() {
+        List<String> addedRoleNames = new ArrayList<String>();
+        addedRoleNames.add("Developer");
+        return addedRoleNames;
+    }
+
 }

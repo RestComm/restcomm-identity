@@ -3,6 +3,7 @@ package com.restcomm.identity;
 import java.io.IOException;
 import java.net.URI;
 import java.net.URISyntaxException;
+import java.util.List;
 
 import javax.ws.rs.core.Response;
 
@@ -23,9 +24,9 @@ import org.keycloak.representations.idm.RoleRepresentation;
 import org.keycloak.representations.idm.UserRepresentation;
 import org.keycloak.util.JsonSerialization;
 
-import com.restcomm.identity.InstanceEndpoint.RolesRepresentation;
-import com.restcomm.identity.InstanceEndpoint.UsersRepresentation;
 import com.restcomm.identity.configuration.Configuration;
+import com.restcomm.identity.UserEndpoint.RolesRepresentation;
+import com.restcomm.identity.UserEndpoint.UsersRepresentation;
 
 public class AdminClient {
     static final Logger logger = Logger.getLogger(AdminClient.class.getName());
@@ -263,7 +264,28 @@ public class AdminClient {
              client.getConnectionManager().shutdown();
          }
      }
+    
+    // returns true if every single operation was successfull or false otherwise
+    public boolean addClientRolesToUser(String clientName, List<String> roles, String username, String token ) {
+        boolean ok = true;
+        for (String role: roles) {
+            RoleRepresentation roleRepr = getClientRoleRequest(clientName, role, token);
+            if (roleRepr != null)
+                addUserClientRoleRequest(username, clientName, roleRepr, token);
+            else
+                ok = false;
+        }
+        return ok;
+    }
 
+    // TODO return the created role representation. It will allow not looking them up again again when granting registrar access.
+    public void addRolesToClient(List<String> roleNames, String clientName, String token) {
+        for (String roleName: roleNames) {
+            RoleRepresentation role = new RoleRepresentation(roleName, roleName);
+            logger.info("Creating client role '" + clientName + ":" + roleName + "'");
+            createClientRoleRequest(role, clientName, token);
+        }
+    }
 
     static class AdminClientException extends Exception {
 
