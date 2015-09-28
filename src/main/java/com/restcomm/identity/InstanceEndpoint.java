@@ -21,9 +21,11 @@ import com.google.gson.Gson;
 import com.restcomm.identity.AdminClient.AdminClientException;
 import com.restcomm.identity.configuration.Configuration;
 import com.restcomm.identity.model.CreateInstanceResponse;
+
 import java.io.UnsupportedEncodingException;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.UUID;
 
 @Path("instances")
 public class InstanceEndpoint extends Endpoint {
@@ -40,10 +42,8 @@ public class InstanceEndpoint extends Endpoint {
 
     @POST
     @Produces("application/json")
-    public Response createInstanceMethod(@FormParam(value = "name") String instanceName, @FormParam(value = "prefix") String prefix, @FormParam(value = "secret") String clientSecret) throws Exception {
-        logger.info("Creating instance '" + instanceName + "'");
+    public Response createInstanceMethod( @FormParam(value = "prefix") String prefix, @FormParam(value = "secret") String clientSecret) throws Exception {
         initKeycloakClient();
-
         // get registrar username
         String registrarUsername = null;
         String registrarUserId = null;
@@ -54,6 +54,9 @@ public class InstanceEndpoint extends Endpoint {
         } else {
             logger.error("No token found for registrar user. Won't properly initialize roles to the user");
         }
+        // generate instance-id (instanceName)
+        String instanceName = generateInstanceId();
+        logger.info("Creating instance '" + instanceName + "' for user '" + registrarUsername + "'");
 
         // initialize roles to be assigned to registrar
         List<String> addedRoleNames = new ArrayList<String>();
@@ -125,6 +128,10 @@ public class InstanceEndpoint extends Endpoint {
 
         return Response.status(Status.OK).build();
         //return dropInstance(instanceName);
+    }
+
+    protected String generateInstanceId() {
+        return UUID.randomUUID().toString().split("-")[0];
     }
 
     /*
