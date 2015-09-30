@@ -61,7 +61,7 @@ public class InstanceEndpoint extends Endpoint {
         // initialize roles to be assigned to registrar
         List<String> addedRoleNames = new ArrayList<String>();
         addedRoleNames.add("Developer");
-        addedRoleNames.add("Admin");
+        addedRoleNames.add("Administrator");
 
         // get a token for accessing the admin REST api
         String adminToken = keycloak.tokenManager().getAccessTokenString();
