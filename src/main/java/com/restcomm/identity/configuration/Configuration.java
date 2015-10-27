@@ -2,6 +2,8 @@ package com.restcomm.identity.configuration;
 
 import java.io.FileNotFoundException;
 import java.io.FileReader;
+import java.net.URI;
+import java.net.URISyntaxException;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -10,6 +12,7 @@ import javax.servlet.ServletContext;
 import org.apache.log4j.Logger;
 
 import com.google.gson.Gson;
+import com.restcomm.identity.http.utils.UriUtils;
 import com.restcomm.identity.model.RiConfigEntity;
 
 public class Configuration {
@@ -25,6 +28,8 @@ public class Configuration {
     private static Configuration cached;
 
     private RiConfigEntity source;
+    private URI authServerUrlBaseFromContainer;
+
 
     private Configuration(ServletContext servletContext) {
         String configPath = servletContext.getRealPath(RELATIVE_CONFIG_PATH);
@@ -57,12 +62,25 @@ public class Configuration {
     }
 
     private RiConfigEntity getDefaultConfig() {
+
         RiConfigEntity config = new RiConfigEntity(DEFAULT_AUTH_SERVER_URL_BASE, DEFAULT_ADMIN_USERNAME, DEFAULT_ADMIN_PASSWORD);
         return config;
     }
 
     public String getAuthServerUrlBase() {
-        return source.getAuthServerUrlBase();
+        if ( source.getAuthServerUrlBase() != null )
+            return source.getAuthServerUrlBase();
+
+        if (authServerUrlBaseFromContainer == null) {
+            UriUtils uriUtils = new UriUtils();
+            try {
+                URI uri = new URI("/");
+                authServerUrlBaseFromContainer = uriUtils.resolve(uri);
+            } catch (URISyntaxException e) {
+                throw new IllegalStateException("Error building auth server url", e);
+            }
+        }
+        return authServerUrlBaseFromContainer.toString();
     }
 
     public String getAdminUsername() {
@@ -92,7 +110,7 @@ public class Configuration {
     public static String getRestcommRvdUiClientName(String instanceName) {
         return instanceName + "-restcomm-rvd-ui";
     }
-    
+
     public List<String> getDefaultDeveloperRoles() {
         List<String> addedRoleNames = new ArrayList<String>();
         addedRoleNames.add("Developer");
