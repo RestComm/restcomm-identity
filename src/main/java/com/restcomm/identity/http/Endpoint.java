@@ -1,4 +1,4 @@
-package com.restcomm.identity;
+package com.restcomm.identity.http;
 
 import javax.servlet.http.HttpServletRequest;
 
@@ -6,6 +6,7 @@ import org.keycloak.KeycloakSecurityContext;
 import org.keycloak.admin.client.Keycloak;
 import org.keycloak.representations.AccessToken;
 
+import com.restcomm.identity.AdminClient;
 import com.restcomm.identity.configuration.Configuration;
 
 public class Endpoint {

@@ -1,11 +1,14 @@
-package com.restcomm.identity;
+package com.restcomm.identity.http;
 
 import java.util.ArrayList;
 import java.util.List;
 
+import javax.ws.rs.DELETE;
 import javax.ws.rs.POST;
 import javax.ws.rs.Path;
+import javax.ws.rs.PathParam;
 import javax.ws.rs.core.Response;
+import javax.ws.rs.core.Response.Status;
 
 import org.apache.http.HttpResponse;
 import org.apache.log4j.Logger;
@@ -13,6 +16,7 @@ import org.keycloak.representations.idm.CredentialRepresentation;
 import org.keycloak.representations.idm.RoleRepresentation;
 import org.keycloak.representations.idm.UserRepresentation;
 
+import com.restcomm.identity.AdminClient;
 import com.restcomm.identity.configuration.Configuration;
 import com.restcomm.identity.model.UserEntity;
 
@@ -61,6 +65,20 @@ public class UserEndpoint extends Endpoint {
         }
 
         return Response.ok().build();
+    }
+
+    @DELETE
+    @Path("/{username}")
+    public Response dropUser(@PathParam("username") String username) {
+        initKeycloakClient();
+        String adminToken = keycloak.tokenManager().getAccessTokenString();
+        // First retrieve the user. We need his id, not usernanme
+        UserRepresentation userRepr = client.getUserByUsername(username, adminToken);
+        if (userRepr == null) {
+            return Response.status(Status.NOT_FOUND).build();
+        }
+
+        return client.dropUserRequest(userRepr.getId(), adminToken);
     }
 
     String extractUserIdFromResourceUrl(String location) {

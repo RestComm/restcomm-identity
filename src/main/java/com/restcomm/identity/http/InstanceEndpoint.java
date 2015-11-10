@@ -1,4 +1,4 @@
-package com.restcomm.identity;
+package com.restcomm.identity.http;
 
 import javax.servlet.http.HttpServletRequest;
 import javax.ws.rs.DELETE;
@@ -18,6 +18,8 @@ import org.keycloak.representations.idm.ClientRepresentation;
 import org.keycloak.representations.idm.UserRepresentation;
 
 import com.google.gson.Gson;
+import com.restcomm.identity.AdminClient;
+import com.restcomm.identity.InstanceManagerException;
 import com.restcomm.identity.AdminClient.AdminClientException;
 import com.restcomm.identity.configuration.Configuration;
 import com.restcomm.identity.model.CreateInstanceResponse;

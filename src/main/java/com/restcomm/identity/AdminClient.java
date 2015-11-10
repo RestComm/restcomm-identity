@@ -25,8 +25,8 @@ import org.keycloak.representations.idm.UserRepresentation;
 import org.keycloak.util.JsonSerialization;
 
 import com.restcomm.identity.configuration.Configuration;
-import com.restcomm.identity.UserEndpoint.RolesRepresentation;
-import com.restcomm.identity.UserEndpoint.UsersRepresentation;
+import com.restcomm.identity.http.UserEndpoint.RolesRepresentation;
+import com.restcomm.identity.http.UserEndpoint.UsersRepresentation;
 
 public class AdminClient {
     static final Logger logger = Logger.getLogger(AdminClient.class.getName());
@@ -66,7 +66,7 @@ public class AdminClient {
         }
         return null;
     }
-    
+
     public UserRepresentation getUserByUsername(String username, String token) {
         HttpClient client = new HttpClientBuilder().disableTrustManager().build();
         try {
@@ -236,6 +236,26 @@ public class AdminClient {
         }
     }
 
+    public Response dropUserRequest( String userId, String token) {
+        HttpClient client = new HttpClientBuilder().disableTrustManager().build();
+         try {
+             URI uri = new URIBuilder(configuration.getAuthServerUrlBase() + "/auth/admin/realms/" + configuration.getRestcommRealm() + "/users/" + userId).build();
+             HttpDelete request = new HttpDelete(uri);
+             request.addHeader("Authorization", "Bearer " + token);
+             HttpResponse response = client.execute(request);
+             int status = response.getStatusLine().getStatusCode();
+             if (status >= 300) {
+                 logger.warn("Cannot drop user '" + userId + "': " + response.getStatusLine());
+             }
+             return Response.status(response.getStatusLine().getStatusCode()).build();
+         } catch (IOException | URISyntaxException e1) {
+             logger.error(e1);
+             throw new RuntimeException("Error dropping user '" + userId + "'", e1);
+         } finally {
+             client.getConnectionManager().shutdown();
+         }
+     }
+
     public Response resetUserPassword(CredentialRepresentation credRepr, String token, String userId) {
         HttpClient client = new HttpClientBuilder().disableTrustManager().build();
          try {
@@ -264,7 +284,7 @@ public class AdminClient {
              client.getConnectionManager().shutdown();
          }
      }
-    
+
     // returns true if every single operation was successfull or false otherwise
     public boolean addClientRolesToUser(String clientName, List<String> roles, String username, String token ) {
         boolean ok = true;
@@ -287,7 +307,7 @@ public class AdminClient {
         }
     }
 
-    static class AdminClientException extends Exception {
+    public static class AdminClientException extends Exception {
 
         public AdminClientException(String message) {
             super(message);
