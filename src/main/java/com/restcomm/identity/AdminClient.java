@@ -301,7 +301,7 @@ public class AdminClient {
     // TODO return the created role representation. It will allow not looking them up again again when granting registrar access.
     public void addRolesToClient(List<String> roleNames, String clientName, String token) {
         for (String roleName: roleNames) {
-            RoleRepresentation role = new RoleRepresentation(roleName, roleName);
+            RoleRepresentation role = new RoleRepresentation(roleName, roleName, false);
             logger.info("Creating client role '" + clientName + ":" + roleName + "'");
             createClientRoleRequest(role, clientName, token);
         }

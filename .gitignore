@@ -3,6 +3,9 @@ target/
 .project
 .settings/
 
+.idea/
+restcomm-identity.iml
+
 *.class
 
 # Mobile Tools for Java (J2ME)
