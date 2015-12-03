@@ -44,6 +44,8 @@ public class Configuration {
             return;
         }
         source = gson.fromJson(reader, RiConfigEntity.class);
+        logger.info("Identity proxy configured. Using auth server: " + getAuthServerUrlBase());
+
         return;
     }
 
