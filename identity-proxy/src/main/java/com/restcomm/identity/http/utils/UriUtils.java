@@ -68,23 +68,13 @@ public final class UriUtils {
                 Boolean bound = (Boolean) mbs.getAttribute(obj, "bound");
 //                Boolean bound = Boolean.getBoolean(mbs.getAttribute(obj, "bound").toString());
                 if (bound) {
-                    String scheme = mbs.getAttribute(obj, "name").toString().replaceAll("\"", "");
+                    String scheme = obj.getKeyProperty("socket-binding");
                     Integer port = (Integer) mbs.getAttribute(obj, "boundPort");
                     String address = ((String)mbs.getAttribute(obj, "boundAddress")).replaceAll("\"", "");
                     logger.info("Jboss Http Connector: "+scheme+"://"+address+":"+port);
                     HttpConnector httpConnector = new HttpConnector(scheme, address, port, scheme.equalsIgnoreCase("https"));
                     endPoints.add(httpConnector);
                 }            }
-        } else if (tomcatObjs != null && tomcatObjs.size() > 0) {
-            for (Iterator<ObjectName> i = tomcatObjs.iterator(); i.hasNext();) {
-                ObjectName obj = i.next();
-                String scheme = mbs.getAttribute(obj, "scheme").toString().replaceAll("\"", "");
-                String port = obj.getKeyProperty("port").replaceAll("\"", "");
-                String address = obj.getKeyProperty("address").replaceAll("\"", "");
-                logger.info("Tomcat Http Connector: "+scheme+"://"+address+":"+port);
-                HttpConnector httpConnector = new HttpConnector(scheme, address, Integer.parseInt(port), scheme.equalsIgnoreCase("https"));
-                endPoints.add(httpConnector);
-            }
         }
         if (endPoints.isEmpty()) {
             logger.error("Coundn't discover any Http Interfaces");
