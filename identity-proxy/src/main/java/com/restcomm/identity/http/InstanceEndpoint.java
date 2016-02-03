@@ -44,7 +44,7 @@ public class InstanceEndpoint extends Endpoint {
 
     @POST
     @Produces("application/json")
-    public Response createInstanceMethod( @FormParam(value = "prefix") List<String> prefixes, @FormParam(value = "secret") String clientSecret) throws Exception {
+    public Response createInstanceMethod( @FormParam(value = "prefix[]") List<String> prefixes, @FormParam(value = "secret") String clientSecret) throws Exception {
         initKeycloakClient();
         // get registrar username
         String registrarUsername = null;
