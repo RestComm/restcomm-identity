@@ -44,7 +44,7 @@ public class InstanceEndpoint extends Endpoint {
 
     @POST
     @Produces("application/json")
-    public Response createInstanceMethod( @FormParam(value = "prefix") String prefix, @FormParam(value = "secret") String clientSecret) throws Exception {
+    public Response createInstanceMethod( @FormParam(value = "prefix") List<String> prefixes, @FormParam(value = "secret") String clientSecret) throws Exception {
         initKeycloakClient();
         // get registrar username
         String registrarUsername = null;
@@ -70,7 +70,7 @@ public class InstanceEndpoint extends Endpoint {
 
         // create Restcomm application
         String clientId = Configuration.getRestcommRestClientName(instanceName);
-        ClientRepresentation clientRepr = buildRestcommClientRepresentation(clientId, prefix, clientSecret);
+        ClientRepresentation clientRepr = buildRestcommClientRepresentation(clientId, prefixes, clientSecret);
         client.createClientRequest(clientRepr, adminToken);
         client.addRolesToClient(addedRoleNames, clientRepr.getId(), adminToken);
         if ( registrarUserId != null )
@@ -78,7 +78,7 @@ public class InstanceEndpoint extends Endpoint {
 
         // Create Restcomm UI application
         clientId = Configuration.getRestcommUiClientName(instanceName);
-        clientRepr = buildRestcommUiClientRepresentation(clientId, prefix);
+        clientRepr = buildRestcommUiClientRepresentation(clientId, prefixes);
         client.createClientRequest(clientRepr, adminToken);
         client.addRolesToClient(addedRoleNames, clientRepr.getId(), adminToken);
         if ( registrarUserId != null )
@@ -86,7 +86,7 @@ public class InstanceEndpoint extends Endpoint {
 
         // Create RVD application
         clientId = Configuration.getRestcommRvdClientName(instanceName);
-        clientRepr = buildRvdClientRepresentation(clientId, prefix, clientSecret);
+        clientRepr = buildRvdClientRepresentation(clientId, prefixes, clientSecret);
         client.createClientRequest(clientRepr, adminToken);
         client.addRolesToClient(addedRoleNames, clientRepr.getId(), adminToken);
         if ( registrarUserId != null )
@@ -94,7 +94,7 @@ public class InstanceEndpoint extends Endpoint {
 
         // Create RVD-UI application
         clientId = Configuration.getRestcommRvdUiClientName(instanceName);
-        clientRepr = buildRvdUiClientRepresentation(clientId, prefix);
+        clientRepr = buildRvdUiClientRepresentation(clientId, prefixes);
         client.createClientRequest(clientRepr, adminToken);
         client.addRolesToClient(addedRoleNames, clientRepr.getId(), adminToken);
         if ( registrarUserId != null )
@@ -209,10 +209,10 @@ public class InstanceEndpoint extends Endpoint {
 
 
 
-    protected ClientRepresentation buildRestcommClientRepresentation(String name, String prefix, String clientSecret) throws UnsupportedEncodingException, InstanceManagerException {
+    protected ClientRepresentation buildRestcommClientRepresentation(String name, List<String> prefixes, String clientSecret) throws UnsupportedEncodingException, InstanceManagerException {
         ClientRepresentation client_model = new ClientRepresentation();
         //client_model.setAdminUrl(prefix + "/restcomm/keycloak");
-        client_model.setBaseUrl(prefix + "/");
+        client_model.setBaseUrl(prefixes.get(0) + "/");
         client_model.setSurrogateAuthRequired(false);
         client_model.setEnabled(true);
         client_model.setNotBefore(0);
@@ -228,20 +228,22 @@ public class InstanceEndpoint extends Endpoint {
         client_model.setSecret(clientSecret);
 
         List<String> redirectUris = new ArrayList<String>();
-        redirectUris.add(prefix + "/*");
+        for (String prefix : prefixes)
+            redirectUris.add(prefix + "/*");
         client_model.setRedirectUris(redirectUris);
 
         List<String> webOrigins = new ArrayList<String>();
-        webOrigins.add(prefix);
+        for (String prefix : prefixes)
+            webOrigins.add(prefix);
         client_model.setWebOrigins(webOrigins);
 
         //makeRequest(client_model);
         return client_model;
     }
 
-    protected ClientRepresentation buildRestcommUiClientRepresentation(String name, String prefix) throws UnsupportedEncodingException, InstanceManagerException {
+    protected ClientRepresentation buildRestcommUiClientRepresentation(String name, List<String> prefixes) throws UnsupportedEncodingException, InstanceManagerException {
         ClientRepresentation client_model = new ClientRepresentation();
-        client_model.setBaseUrl(prefix + "/index.html");
+        client_model.setBaseUrl(prefixes.get(0) + "/index.html");
         client_model.setSurrogateAuthRequired(false);
         client_model.setEnabled(true);
         client_model.setNotBefore(0);
@@ -258,21 +260,23 @@ public class InstanceEndpoint extends Endpoint {
         //client_model.setSecret(clientSecret);
 
         List<String> redirectUris = new ArrayList<String>();
-        redirectUris.add(prefix + "/*");
+        for (String prefix : prefixes)
+            redirectUris.add(prefix + "/*");
         client_model.setRedirectUris(redirectUris);
 
         List<String> webOrigins = new ArrayList<String>();
-        webOrigins.add(prefix);
+        for (String prefix : prefixes)
+            webOrigins.add(prefix);
         client_model.setWebOrigins(webOrigins);
 
         //makeRequest(client_model);
         return client_model;
     }
 
-    protected ClientRepresentation buildRvdClientRepresentation(String name, String prefix, String clientSecret) throws UnsupportedEncodingException, InstanceManagerException {
+    protected ClientRepresentation buildRvdClientRepresentation(String name, List<String> prefixes, String clientSecret) throws UnsupportedEncodingException, InstanceManagerException {
         ClientRepresentation client_model = new ClientRepresentation();
         //client_model.setAdminUrl(prefix + "/restcomm-rvd/services");
-        client_model.setBaseUrl(prefix + "/restcomm-rvd/services");
+        client_model.setBaseUrl(prefixes.get(0) + "/restcomm-rvd/services");
         client_model.setSurrogateAuthRequired(false);
         client_model.setEnabled(true);
         client_model.setNotBefore(0);
@@ -291,9 +295,9 @@ public class InstanceEndpoint extends Endpoint {
         return client_model;
     }
 
-    protected ClientRepresentation buildRvdUiClientRepresentation(String name, String prefix) throws UnsupportedEncodingException, InstanceManagerException {
+    protected ClientRepresentation buildRvdUiClientRepresentation(String name, List<String> prefixes) throws UnsupportedEncodingException, InstanceManagerException {
         ClientRepresentation client_model = new ClientRepresentation();
-        client_model.setBaseUrl(prefix + "/restcomm-rvd/index.html");
+        client_model.setBaseUrl(prefixes.get(0) + "/restcomm-rvd/index.html");
         client_model.setSurrogateAuthRequired(false);
         client_model.setEnabled(true);
         client_model.setNotBefore(0);
@@ -310,11 +314,13 @@ public class InstanceEndpoint extends Endpoint {
 
 
         List<String> redirectUris = new ArrayList<String>();
-        redirectUris.add(prefix + "/restcomm-rvd/*");
+        for (String prefix : prefixes)
+            redirectUris.add(prefix + "/restcomm-rvd/*");
         client_model.setRedirectUris(redirectUris);
 
         List<String> webOrigins = new ArrayList<String>();
-        webOrigins.add(prefix);
+        for (String prefix : prefixes)
+            webOrigins.add(prefix);
         client_model.setWebOrigins(webOrigins);
 
         //makeRequest(client_model);
