@@ -9,6 +9,7 @@ import java.util.List;
 
 import javax.servlet.ServletContext;
 
+import com.restcomm.identity.Utils;
 import org.apache.log4j.Logger;
 
 import com.google.gson.Gson;
@@ -71,7 +72,7 @@ public class Configuration {
 
     public String getAuthServerUrlBase() {
         if ( source.getAuthServerUrlBase() != null )
-            return source.getAuthServerUrlBase();
+            return Utils.removeUrlTrailingSlash(source.getAuthServerUrlBase());
 
         if (authServerUrlBaseFromContainer == null) {
             UriUtils uriUtils = new UriUtils();
@@ -82,7 +83,7 @@ public class Configuration {
                 throw new IllegalStateException("Error building auth server url", e);
             }
         }
-        return authServerUrlBaseFromContainer.toString();
+        return Utils.removeUrlTrailingSlash(authServerUrlBaseFromContainer.toString());
     }
 
     public String getAdminUsername() {
