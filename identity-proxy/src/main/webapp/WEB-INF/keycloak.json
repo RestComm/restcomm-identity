@@ -1,9 +1,0 @@
-{
-  "realm": "restcomm",
-  "realm-public-key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAmnekczL6HB4bVVBJOnxOxJHHIktTzKMIwCTE1BuO7mrc5lB3ij3XSZGcCkN6CUK7lHo6bo1Gjl/YC8UhO7q56NHtgvVyhkOL3xOakkxMgHC6qfOb6tG/tMUMncPXAMDYz/2raVRh1WjNuHgnPNiiWNeNhG/3nACoR2b9OJR49nxftjfr0c3rc/rQb1LEYGgD0u6UYA/HvenyedmofdJMMflzUYvKAHAWebeyKTk10GFi+LVpbpVT922t+e9owcYqfGPgddkcfNsHzAmxUgIfO1WFzeMEmXzv5oxBbhx6hM4EK+9jzcpIJ03Fo6c5+ZYHWFpjKhJoj7xBFJo/qUzZpwIDAQAB",
-  "auth-server-url": "/auth",
-  "ssl-required": "external",
-  "resource": "restcomm-identity-rest",
-  "public-client": true,
-  "enable-cors": true
-}
